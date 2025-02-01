@@ -81,7 +81,51 @@ func TestBPlusTree_InsertAndSearch(t *testing.T) {
 	}
 }
 
-func TestBPlusTree_Concurrency(t *testing.T) {
+func TestBPlusTree_ReadConcurrency(t *testing.T) {
+	tree := bptree.NewBPlusTree[int, string](4)
+
+	// Insert keys sequentially
+	for i := 1; i <= 100; i++ {
+		tree.Insert(i, string(rune('a'+i-1)))
+	}
+
+	var wg sync.WaitGroup
+	// Search for keys concurrently
+	for i := 1; i <= 100; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			if _, found := tree.Search(i); !found {
+				t.Errorf("Expected to find key %d", i)
+			}
+		}(i)
+	}
+	wg.Wait()
+}
+
+func TestBPlusTree_WriteConcurrency(t *testing.T) {
+	tree := bptree.NewBPlusTree[int, string](4)
+
+	// Insert keys concurrently
+	var wg sync.WaitGroup
+	for i := 1; i <= 100; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			tree.Insert(i, string(rune('a'+i-1)))
+		}(i)
+	}
+	wg.Wait()
+
+	// Search for keys sequentially
+	for i := 1; i <= 100; i++ {
+		if _, found := tree.Search(i); !found {
+			t.Errorf("Expected to find key %d", i)
+		}
+	}
+}
+
+func TestBPlusTree_FullConcurrency(t *testing.T) {
 	tree := bptree.NewBPlusTree[int, string](4)
 
 	// Insert keys concurrently

@@ -44,6 +44,7 @@ type BPlusTree[K comparable, V any] struct {
 	root   *node[K, V]
 	order  int
 	height int
+	m      sync.RWMutex
 }
 
 func (tree *BPlusTree[K, V]) Height() int {
@@ -84,11 +85,13 @@ func NewBPlusTree[K comparable, V any](order int) *BPlusTree[K, V] {
 // Search locates the value associated with `key` (if it exists).
 // Demonstrates "latch coupling" to move down the tree with shared (read) locks.
 func (tree *BPlusTree[K, V]) Search(key K) (V, bool) {
+	tree.m.RLock()
 	current := tree.root
 	if current == nil {
 		var zero V
 		return zero, false
 	}
+	tree.m.RUnlock()
 
 	// Lock the current node in shared mode
 	current.mutex.RLock()
@@ -126,8 +129,11 @@ func (tree *BPlusTree[K, V]) Search(key K) (V, bool) {
 // simplified concurrency approach (read-latching during descent,
 // then switching to an exclusive lock at the leaf).
 func (tree *BPlusTree[K, V]) Insert(key K, value V) {
+	tree.m.RLock()
 	// If there's no root, create one (edge case)
 	if tree.root == nil {
+		tree.m.Lock()
+		defer tree.m.Unlock()
 		tree.root = &node[K, V]{
 			isLeaf: true,
 			keys:   []K{key},
@@ -138,6 +144,7 @@ func (tree *BPlusTree[K, V]) Insert(key K, value V) {
 
 	current := tree.root
 	current.mutex.RLock()
+	tree.m.RUnlock()
 
 	// Traverse down with read locks until we reach a leaf
 	for !current.isLeaf {
@@ -202,13 +209,18 @@ func (tree *BPlusTree[K, V]) splitLeaf(leaf *node[K, V]) {
 
 	// If the leaf is the root (no parent), create a new root
 	if leaf.parent == nil {
+		tree.m.Lock()
+		defer tree.m.Unlock()
+
 		newRoot := &node[K, V]{
 			isLeaf:   false,
 			keys:     []K{newLeaf.keys[0]},
 			children: []*node[K, V]{leaf, newLeaf},
 		}
+
 		leaf.parent = newRoot
 		newLeaf.parent = newRoot
+
 		tree.root = newRoot
 		tree.height++
 		return
@@ -274,6 +286,9 @@ func splitInternalNode[K comparable, V any](tree *BPlusTree[K, V], internal *nod
 	internal.children = internal.children[:mid+1]
 
 	if internal.parent == nil {
+		tree.m.Lock()
+		defer tree.m.Unlock()
+
 		// Create a new root
 		newRoot := &node[K, V]{
 			isLeaf:   false,
