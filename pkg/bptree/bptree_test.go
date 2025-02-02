@@ -105,6 +105,7 @@ func TestBPlusTree_ReadConcurrency(t *testing.T) {
 
 func TestBPlusTree_WriteConcurrency(t *testing.T) {
 	tree := bptree.NewBPlusTree[int, string](4)
+	tree.Insert(200, "two hundred")
 
 	// Insert keys concurrently
 	var wg sync.WaitGroup
@@ -127,6 +128,8 @@ func TestBPlusTree_WriteConcurrency(t *testing.T) {
 
 func TestBPlusTree_FullConcurrency(t *testing.T) {
 	tree := bptree.NewBPlusTree[int, string](4)
+
+	tree.Insert(200, "two hundred")
 
 	// Insert keys concurrently
 	var wg sync.WaitGroup
