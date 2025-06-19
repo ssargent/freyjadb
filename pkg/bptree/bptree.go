@@ -35,7 +35,7 @@ const DefaultOrder = 4
 func findChildIndex(keys [][]byte, searchKey []byte) int {
 	// Linear scan for simplicity; you might use binary search for better performance.
 	for i, k := range keys {
-		if bytes.Compare(searchKey, k) == 0 {
+		if bytes.Equal(searchKey, k) {
 			return i // Exact match found
 		}
 	}
@@ -111,7 +111,7 @@ func (tree *BPlusTree) Search(key []byte) (*ksuid.KSUID, bool) {
 	// We're now at a leaf, holding its read lock
 	// Search its keys
 	for i, k := range current.keys {
-		if bytes.Compare(key, k) == 0 {
+		if bytes.Equal(key, k) {
 			val := current.values[i]
 			// Release leaf lock and return
 			current.mutex.RUnlock()
@@ -183,7 +183,7 @@ func insertKeyValueInLeaf(leaf *node, key []byte, value *ksuid.KSUID) {
 		idx++
 	}
 	// Check if the key already exists
-	if idx < len(leaf.keys) && bytes.Compare(leaf.keys[idx], key) == 0 {
+	if idx < len(leaf.keys) && bytes.Equal(leaf.keys[idx], key) {
 		leaf.values[idx] = value // Update the existing value
 		return
 	}
