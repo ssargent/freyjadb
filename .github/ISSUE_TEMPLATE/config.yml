@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: FreyjaDB Discussions
+    url: https://github.com/ssargent/freyjadb/discussions
+    about: Please ask and answer questions here.
+  - name: Security Vulnerabilities
+    url: https://github.com/ssargent/freyjadb/security/advisories/new
+    about: Please report security vulnerabilities through GitHub Security Advisories.

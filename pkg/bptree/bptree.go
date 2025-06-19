@@ -2,7 +2,10 @@
 package bptree
 
 import (
+	"bytes"
 	"sync"
+
+	"github.com/segmentio/ksuid"
 )
 
 // DefaultOrder is the fallback branching factor if a user-supplied order is too small.
@@ -10,7 +13,7 @@ const DefaultOrder = 4
 
 // compare is a helper function for ordering keys.
 // Replace this with something more flexible (e.g., a comparator interface or Go 1.18+ generics constraints).
-func compare[K comparable](a, b K) int {
+/* func compare[K comparable](a, b K) int {
 	switch a := any(a).(type) {
 	case int:
 		b := any(b).(int)
@@ -25,57 +28,57 @@ func compare[K comparable](a, b K) int {
 		return 0
 	}
 	panic("compare: type not supported or not implemented yet")
-}
+} */
 
 // findChildIndex determines which child pointer to follow
 // (or where to insert a new key) in an internal node.
-func findChildIndex[K comparable](keys []K, searchKey K) int {
+func findChildIndex(keys [][]byte, searchKey []byte) int {
 	// Linear scan for simplicity; you might use binary search for better performance.
 	for i, k := range keys {
-		if compare(searchKey, k) < 0 {
-			return i
+		if bytes.Compare(searchKey, k) == 0 {
+			return i // Exact match found
 		}
 	}
 	return len(keys)
 }
 
 // BPlusTree is our main structure.
-type BPlusTree[K comparable, V any] struct {
-	root   *node[K, V]
+type BPlusTree struct {
+	root   *node
 	order  int
 	height int
 	m      sync.RWMutex
 }
 
-func (tree *BPlusTree[K, V]) Height() int {
+func (tree *BPlusTree) Height() int {
 	return tree.height
 }
 
 // node represents both internal and leaf nodes in the B+Tree.
 // Each node has its own RWMutex for concurrency control.
-type node[K comparable, V any] struct {
+type node struct {
 	mutex    sync.RWMutex // per-node latch
 	isLeaf   bool
-	keys     []K
-	children []*node[K, V] // used if !isLeaf
-	values   []V           // used if isLeaf
-	parent   *node[K, V]
-	next     *node[K, V] // leaf-link pointer, for range scans
+	keys     [][]byte
+	children []*node        // used if !isLeaf
+	values   []*ksuid.KSUID // used if isLeaf
+	parent   *node
+	next     *node // leaf-link pointer, for range scans
 }
 
 // NewBPlusTree creates and returns a B+Tree with the given order.
 // If the specified order < 3, we fall back to DefaultOrder.
-func NewBPlusTree[K comparable, V any](order int) *BPlusTree[K, V] {
+func NewBPlusTree(order int) *BPlusTree {
 	if order < 3 {
 		order = DefaultOrder
 	}
-	rootNode := &node[K, V]{
+	rootNode := &node{
 		isLeaf:   true,
-		keys:     make([]K, 0, order),
-		values:   make([]V, 0, order),
-		children: make([]*node[K, V], 0),
+		keys:     make([][]byte, 0, order),
+		values:   make([]*ksuid.KSUID, 0, order),
+		children: make([]*node, 0),
 	}
-	return &BPlusTree[K, V]{
+	return &BPlusTree{
 		root:   rootNode,
 		order:  order,
 		height: 1,
@@ -84,11 +87,10 @@ func NewBPlusTree[K comparable, V any](order int) *BPlusTree[K, V] {
 
 // Search locates the value associated with `key` (if it exists).
 // Demonstrates "latch coupling" to move down the tree with shared (read) locks.
-func (tree *BPlusTree[K, V]) Search(key K) (V, bool) {
+func (tree *BPlusTree) Search(key []byte) (*ksuid.KSUID, bool) {
 	current := tree.root
 	if current == nil {
-		var zero V
-		return zero, false
+		return nil, false
 	}
 
 	// Lock the current node in shared mode
@@ -109,9 +111,16 @@ func (tree *BPlusTree[K, V]) Search(key K) (V, bool) {
 	// We're now at a leaf, holding its read lock
 	// Search its keys
 	for i, k := range current.keys {
-		if k == key {
+		if bytes.Compare(key, k) == 0 {
 			val := current.values[i]
 			// Release leaf lock and return
+			current.mutex.RUnlock()
+			return val, true
+		}
+
+		// we might not have an exact match, we need to support starts with
+		if bytes.HasPrefix(key, k) {
+			val := current.values[i]
 			current.mutex.RUnlock()
 			return val, true
 		}
@@ -119,20 +128,19 @@ func (tree *BPlusTree[K, V]) Search(key K) (V, bool) {
 
 	// Key not found
 	current.mutex.RUnlock()
-	var zero V
-	return zero, false
+	return nil, false
 }
 
 // Insert adds a (key, value) pair to the B+Tree. Demonstrates a
 // simplified concurrency approach (read-latching during descent,
 // then switching to an exclusive lock at the leaf).
-func (tree *BPlusTree[K, V]) Insert(key K, value V) {
+func (tree *BPlusTree) Insert(key []byte, value ksuid.KSUID) {
 	// If there's no root, create one (edge case)
 	if tree.root == nil {
-		tree.root = &node[K, V]{
+		tree.root = &node{
 			isLeaf: true,
-			keys:   []K{key},
-			values: []V{value},
+			keys:   [][]byte{key},
+			values: []*ksuid.KSUID{&value},
 		}
 		return
 	}
@@ -158,7 +166,7 @@ func (tree *BPlusTree[K, V]) Insert(key K, value V) {
 	defer current.mutex.Unlock()
 
 	// Insert the key/value in sorted order
-	insertKeyValueInLeaf(current, key, value)
+	insertKeyValueInLeaf(current, key, &value)
 
 	// Check overflow
 	if len(current.keys) > tree.order {
@@ -169,13 +177,13 @@ func (tree *BPlusTree[K, V]) Insert(key K, value V) {
 }
 
 // tree.m.Unlock() // Removed redundant unlock
-func insertKeyValueInLeaf[K comparable, V any](leaf *node[K, V], key K, value V) {
+func insertKeyValueInLeaf(leaf *node, key []byte, value *ksuid.KSUID) {
 	idx := 0
-	for idx < len(leaf.keys) && compare(leaf.keys[idx], key) < 0 {
+	for idx < len(leaf.keys) && bytes.Compare(leaf.keys[idx], key) < 0 {
 		idx++
 	}
 	// Check if the key already exists
-	if idx < len(leaf.keys) && compare(leaf.keys[idx], key) == 0 {
+	if idx < len(leaf.keys) && bytes.Compare(leaf.keys[idx], key) == 0 {
 		leaf.values[idx] = value // Update the existing value
 		return
 	}
@@ -192,13 +200,13 @@ func insertKeyValueInLeaf[K comparable, V any](leaf *node[K, V], key K, value V)
 
 // splitLeaf handles splitting a leaf node that has overflowed.
 // Must be called with leaf node locked in exclusive mode.
-func (tree *BPlusTree[K, V]) splitLeaf(leaf *node[K, V]) {
+func (tree *BPlusTree) splitLeaf(leaf *node) {
 	mid := len(leaf.keys) / 2
 
-	newLeaf := &node[K, V]{
+	newLeaf := &node{
 		isLeaf: true,
-		keys:   append([]K{}, leaf.keys[mid:]...),
-		values: append([]V{}, leaf.values[mid:]...),
+		keys:   append(make([][]byte, 0), leaf.keys[mid:]...),
+		values: append(make([]*ksuid.KSUID, 0), leaf.values[mid:]...),
 		next:   leaf.next,
 		parent: leaf.parent,
 	}
@@ -210,10 +218,10 @@ func (tree *BPlusTree[K, V]) splitLeaf(leaf *node[K, V]) {
 
 	// If the leaf is the root (no parent), create a new root
 	if leaf.parent == nil {
-		newRoot := &node[K, V]{
+		newRoot := &node{
 			isLeaf:   false,
-			keys:     []K{newLeaf.keys[0]},
-			children: []*node[K, V]{leaf, newLeaf},
+			keys:     [][]byte{newLeaf.keys[0]},
+			children: []*node{leaf, newLeaf},
 		}
 
 		leaf.parent = newRoot
@@ -237,12 +245,12 @@ func (tree *BPlusTree[K, V]) splitLeaf(leaf *node[K, V]) {
 
 // insertKeyInParent inserts `key` and links `leftChild` & `rightChild` in the parent.
 // Must be called with the parent locked in exclusive mode.
-func insertKeyInParent[K comparable, V any](tree *BPlusTree[K, V],
-	parent *node[K, V], key K,
-	leftChild, rightChild *node[K, V]) {
+func insertKeyInParent(tree *BPlusTree,
+	parent *node, key []byte,
+	leftChild, rightChild *node) {
 
 	idx := 0
-	for idx < len(parent.keys) && compare(parent.keys[idx], key) < 0 {
+	for idx < len(parent.keys) && bytes.Compare(parent.keys[idx], key) < 0 {
 		idx++
 	}
 
@@ -264,14 +272,14 @@ func insertKeyInParent[K comparable, V any](tree *BPlusTree[K, V],
 
 // splitInternalNode handles splitting an internal node that has overflowed.
 // Must be called with 'internal' locked in exclusive mode.
-func splitInternalNode[K comparable, V any](tree *BPlusTree[K, V], internal *node[K, V]) {
+func splitInternalNode(tree *BPlusTree, internal *node) {
 	mid := len(internal.keys) / 2
 	splitKey := internal.keys[mid]
 
-	newInternal := &node[K, V]{
+	newInternal := &node{
 		isLeaf:   false,
-		keys:     append([]K{}, internal.keys[mid+1:]...),
-		children: append([]*node[K, V]{}, internal.children[mid+1:]...),
+		keys:     append(make([][]byte, 0), internal.keys[mid:]...),
+		children: append([]*node{}, internal.children[mid+1:]...),
 		parent:   internal.parent,
 	}
 
@@ -286,10 +294,10 @@ func splitInternalNode[K comparable, V any](tree *BPlusTree[K, V], internal *nod
 
 	if internal.parent == nil {
 		// Create a new root
-		newRoot := &node[K, V]{
+		newRoot := &node{
 			isLeaf:   false,
-			keys:     []K{splitKey},
-			children: []*node[K, V]{internal, newInternal},
+			keys:     [][]byte{splitKey},
+			children: []*node{internal, newInternal},
 		}
 		internal.parent = newRoot
 		newInternal.parent = newRoot

@@ -65,3 +65,46 @@ tags
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/go,visualstudiocode,vim
+
+# FreyjaDB specific
+bin/
+dist/
+testdata/
+data/
+*.data
+*.hint
+*.db
+*.sqlite
+*.sqlite3
+
+# Performance profiling files
+*.prof
+*.trace
+cpu.prof
+mem.prof
+trace.out
+
+# Coverage files
+coverage/
+coverage.html
+
+# Local configuration
+config.local.*
+.config/
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+
+# Temporary files
+tmp/
+temp/

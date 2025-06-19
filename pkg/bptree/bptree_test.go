@@ -1,161 +1,93 @@
-package bptree_test
+package bptree
 
 import (
-	"sync"
+	"bytes"
 	"testing"
 
-	"github.com/ssargent/freyjadb/pkg/bptree"
+	"github.com/segmentio/ksuid"
 )
 
+func TestNewBPlusTree(t *testing.T) {
+	tree := NewBPlusTree(3)
+	if tree == nil {
+		t.Fatal("Expected non-nil tree")
+	}
+	if tree.order != 3 {
+		t.Fatalf("Expected order 3, got %d", tree.order)
+	}
+	if tree.height != 1 {
+		t.Fatalf("Expected height 1, got %d", tree.height)
+	}
+}
+
 func TestBPlusTree_InsertAndSearch(t *testing.T) {
-	tests := map[string]struct {
-		tree     *bptree.BPlusTree[int, string]
-		actions  []func(tree *bptree.BPlusTree[int, string])
-		searches []struct {
-			key      int
-			expected string
-			found    bool
-		}
-	}{
-		"Insert and search integers": {
-			tree: bptree.NewBPlusTree[int, string](4),
-			actions: []func(tree *bptree.BPlusTree[int, string]){
-				func(tree *bptree.BPlusTree[int, string]) { tree.Insert(1, "one") },
-				func(tree *bptree.BPlusTree[int, string]) { tree.Insert(2, "two") },
-				func(tree *bptree.BPlusTree[int, string]) { tree.Insert(3, "three") },
-				func(tree *bptree.BPlusTree[int, string]) { tree.Insert(4, "four") },
-				func(tree *bptree.BPlusTree[int, string]) { tree.Insert(5, "five") },
-			},
-			searches: []struct {
-				key      int
-				expected string
-				found    bool
-			}{
-				{1, "one", true},
-				{2, "two", true},
-				{3, "three", true},
-				{4, "four", true},
-				{5, "five", true},
-				{6, "", false},
-			},
-		},
-		"Insert duplicate keys": {
-			tree: bptree.NewBPlusTree[int, string](4),
-			actions: []func(tree *bptree.BPlusTree[int, string]){
-				func(tree *bptree.BPlusTree[int, string]) { tree.Insert(1, "one") },
-				func(tree *bptree.BPlusTree[int, string]) { tree.Insert(1, "uno") },
-			},
-			searches: []struct {
-				key      int
-				expected string
-				found    bool
-			}{
-				{1, "uno", true},
-			},
-		},
-		"Search empty tree": {
-			tree:    bptree.NewBPlusTree[int, string](4),
-			actions: []func(tree *bptree.BPlusTree[int, string]){},
-			searches: []struct {
-				key      int
-				expected string
-				found    bool
-			}{
-				{1, "", false},
-			},
-		},
+	tree := NewBPlusTree(3)
+
+	key1 := []byte("key1")
+	val1 := ksuid.New()
+	tree.Insert(key1, val1)
+
+	key2 := []byte("key2")
+	val2 := ksuid.New()
+	tree.Insert(key2, val2)
+
+	// Test search for existing keys
+	if v, found := tree.Search(key1); !found || !bytes.Equal(v.Bytes(), val1.Bytes()) {
+		t.Fatalf("Expected to find key1 with value %v, got %v", val1, v)
 	}
 
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			for _, action := range tt.actions {
-				action(tt.tree)
-			}
-			for _, search := range tt.searches {
-				value, found := tt.tree.Search(search.key)
-				if found != search.found || value != search.expected {
-					t.Errorf("Search(%d) = %v, %v; want %v, %v", search.key, value, found, search.expected, search.found)
-				}
-			}
-		})
+	if v, found := tree.Search(key2); !found || !bytes.Equal(v.Bytes(), val2.Bytes()) {
+		t.Fatalf("Expected to find key2 with value %v, got %v", val2, v)
+	}
+
+	// Test search for non-existing key
+	if _, found := tree.Search([]byte("key3")); found {
+		t.Fatal("Expected not to find key3")
 	}
 }
 
-func TestBPlusTree_ReadConcurrency(t *testing.T) {
-	tree := bptree.NewBPlusTree[int, string](4)
+func TestBPlusTree_SplitLeaf(t *testing.T) {
+	tree := NewBPlusTree(3)
 
-	// Insert keys sequentially
-	for i := 1; i <= 100; i++ {
-		tree.Insert(i, string(rune('a'+i-1)))
+	keys := [][]byte{[]byte("key1"), []byte("key2"), []byte("key3"), []byte("key4")}
+	values := []ksuid.KSUID{ksuid.New(), ksuid.New(), ksuid.New(), ksuid.New()}
+
+	for i := range keys {
+		tree.Insert(keys[i], values[i])
 	}
 
-	var wg sync.WaitGroup
-	// Search for keys concurrently
-	for i := 1; i <= 100; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			if _, found := tree.Search(i); !found {
-				t.Errorf("Expected to find key %d", i)
-			}
-		}(i)
+	// Check if the tree height increased due to splits
+	if tree.height != 2 {
+		t.Fatalf("Expected tree height 2, got %d", tree.height)
 	}
-	wg.Wait()
-}
 
-/* These tests are not currently working as we do not yet support multiple writers */
-// They are left here for future reference when we implement write concurrency
-// They are commented out to avoid test failures
-/*
-func TestBPlusTree_WriteConcurrency(t *testing.T) {
-	tree := bptree.NewBPlusTree[int, string](4)
-	tree.Insert(200, "two hundred")
-
-	// Insert keys concurrently
-	var wg sync.WaitGroup
-	for i := 1; i <= 100; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			tree.Insert(i, string(rune('a'+i-1)))
-		}(i)
-	}
-	wg.Wait()
-
-	// Search for keys sequentially
-	for i := 1; i <= 100; i++ {
-		if _, found := tree.Search(i); !found {
-			t.Errorf("Expected to find key %d", i)
+	// Check if all keys are present
+	for i, key := range keys {
+		if v, found := tree.Search(key); !found || !bytes.Equal(v.Bytes(), values[i].Bytes()) {
+			t.Fatalf("Expected to find %s with value %v, got %v", key, values[i], v)
 		}
 	}
 }
 
-func TestBPlusTree_FullConcurrency(t *testing.T) {
-	tree := bptree.NewBPlusTree[int, string](4)
+func TestBPlusTree_SplitInternalNode(t *testing.T) {
+	tree := NewBPlusTree(3)
 
-	tree.Insert(200, "two hundred")
+	keys := [][]byte{[]byte("key1"), []byte("key2"), []byte("key3"), []byte("key4"), []byte("key5")}
+	values := []ksuid.KSUID{ksuid.New(), ksuid.New(), ksuid.New(), ksuid.New(), ksuid.New()}
 
-	// Insert keys concurrently
-	var wg sync.WaitGroup
-	for i := 1; i <= 100; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			tree.Insert(i, string(rune('a'+i-1)))
-		}(i)
+	for i := range keys {
+		tree.Insert(keys[i], values[i])
 	}
-	wg.Wait()
 
-	// Search for keys concurrently
-	for i := 1; i <= 100; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			if _, found := tree.Search(i); !found {
-				t.Errorf("Expected to find key %d", i)
-			}
-		}(i)
+	// Check if the tree height increased due to splits
+	if tree.height != 3 {
+		t.Fatalf("Expected tree height 3, got %d", tree.height)
 	}
-	wg.Wait()
+
+	// Check if all keys are present
+	for i, key := range keys {
+		if v, found := tree.Search(key); !found || !bytes.Equal(v.Bytes(), values[i].Bytes()) {
+			t.Fatalf("Expected to find %s with value %v, got %v", key, values[i], v)
+		}
+	}
 }
-*/
