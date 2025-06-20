@@ -106,7 +106,7 @@ See our [Project Plan](docs/project_plan.md) for the complete development roadma
 
 ## 📄 License
 
-FreyjaDB is released under the MIT License. See [LICENSE](LICENSE) for details.
+FreyjaDB is released under the BSD 3-Clause License. See [LICENSE](LICENSE) for details.
 
 ---
 
