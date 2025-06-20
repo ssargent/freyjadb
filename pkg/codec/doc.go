@@ -1,7 +1,7 @@
 // Package codec provides record serialization and deserialization for FreyjaDB.
 //
 // The codec package implements a binary record format for storing key-value pairs
-// with integrity checking and metadata. This is the foundation for FreyjaDB's 
+// with integrity checking and metadata. This is the foundation for FreyjaDB's
 // log-structured storage engine.
 //
 // # Record Format
@@ -24,7 +24,7 @@
 //
 // The CRC32 checksum is calculated over all fields except the CRC32 field itself:
 //   - KeySize (4 bytes)
-//   - ValueSize (4 bytes) 
+//   - ValueSize (4 bytes)
 //   - Timestamp (8 bytes)
 //   - Key data (KeySize bytes)
 //   - Value data (ValueSize bytes)
@@ -37,19 +37,19 @@
 // Basic encoding and decoding:
 //
 //	codec := codec.NewRecordCodec()
-//	
+//
 //	// Encode a record
 //	encoded, err := codec.Encode([]byte("key"), []byte("value"))
 //	if err != nil {
 //	    return err
 //	}
-//	
+//
 //	// Decode a record
 //	record, err := codec.Decode(encoded)
 //	if err != nil {
 //	    return err
 //	}
-//	
+//
 //	// Validate integrity
 //	if err := record.Validate(); err != nil {
 //	    return err // Record is corrupted

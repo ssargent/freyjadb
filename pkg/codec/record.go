@@ -80,15 +80,15 @@ func (r *Record) calculateCRC32() uint32 {
 	// TODO: Implement CRC32 calculation
 	// Calculate checksum over: KeySize + ValueSize + Timestamp + Key + Value
 	crc := crc32.NewIEEE()
-	
+
 	// Write header fields (excluding CRC32)
 	binary.Write(crc, binary.LittleEndian, r.KeySize)
 	binary.Write(crc, binary.LittleEndian, r.ValueSize)
 	binary.Write(crc, binary.LittleEndian, r.Timestamp)
-	
+
 	// Write data
 	crc.Write(r.Key)
 	crc.Write(r.Value)
-	
+
 	return crc.Sum32()
 }
