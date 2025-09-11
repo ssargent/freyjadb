@@ -245,7 +245,7 @@ func TestRecordCodec_MalformedData(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := codec.Decode(tc.data)
 			if err == nil {
-				t.Error("Expected decode to fail for malformed data, but it succeeded")
+				t.Errorf("Expected decode to fail for malformed data, but it succeeded (%s)", tc.name)
 			}
 		})
 	}

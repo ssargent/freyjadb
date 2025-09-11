@@ -28,33 +28,50 @@ func NewRecordCodec() *RecordCodec {
 // Encode serializes a key-value pair into a binary record format
 // Format: [CRC32(4)][KeySize(4)][ValueSize(4)][Timestamp(8)][Key][Value]
 func (c *RecordCodec) Encode(key, value []byte) ([]byte, error) {
-	// TODO: Implement record encoding
-	// 1. Create record with current timestamp
-	// 2. Calculate sizes
-	// 3. Serialize header + data
-	// 4. Calculate and set CRC32
-	// 5. Return complete binary record
-	return nil, fmt.Errorf("not implemented")
+	r := NewRecord(key, value)
+	r.CRC32 = r.calculateCRC32()
+
+	buf := make([]byte, r.Size())
+
+	binary.LittleEndian.PutUint32(buf[0:], r.CRC32)
+	binary.LittleEndian.PutUint32(buf[4:], r.KeySize)
+	binary.LittleEndian.PutUint32(buf[8:], r.ValueSize)
+	binary.LittleEndian.PutUint64(buf[12:], r.Timestamp)
+	copy(buf[20:], r.Key)
+	copy(buf[20+r.KeySize:], r.Value)
+
+	return buf, nil
 }
 
 // Decode deserializes a binary record into a Record struct
 func (c *RecordCodec) Decode(data []byte) (*Record, error) {
-	// TODO: Implement record decoding
-	// 1. Validate minimum size
-	// 2. Parse header fields
-	// 3. Extract key and value data
-	// 4. Validate CRC32
-	// 5. Return Record struct
-	return nil, fmt.Errorf("not implemented")
+	if len(data) < 20 {
+		return nil, fmt.Errorf("data too short for record header")
+	}
+
+	r := &Record{}
+	r.CRC32 = binary.LittleEndian.Uint32(data[0:4])
+	r.KeySize = binary.LittleEndian.Uint32(data[4:8])
+	r.ValueSize = binary.LittleEndian.Uint32(data[8:12])
+	r.Timestamp = binary.LittleEndian.Uint64(data[12:20])
+	// Validate sizes
+	if len(data) < int(20+r.KeySize+r.ValueSize) {
+		return nil, fmt.Errorf("data too short for key/value sizes: %d < %d", len(data), 20+r.KeySize+r.ValueSize)
+	}
+
+	r.Key = data[20 : 20+r.KeySize]
+	r.Value = data[20+r.KeySize : 20+r.KeySize+r.ValueSize]
+
+	return r, nil
 }
 
 // Validate checks the integrity of a record using CRC32
 func (r *Record) Validate() error {
-	// TODO: Implement CRC32 validation
-	// 1. Recalculate CRC32 for record data
-	// 2. Compare with stored CRC32
-	// 3. Return error if mismatch
-	return fmt.Errorf("not implemented")
+	if r.CRC32 != r.calculateCRC32() {
+		return fmt.Errorf("CRC32 mismatch: %d != %d", r.CRC32, r.calculateCRC32())
+	}
+
+	return nil
 }
 
 // Size returns the total size of the record when encoded

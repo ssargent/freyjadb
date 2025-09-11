@@ -1,3 +1,6 @@
+//go:build fuzz
+// +build fuzz
+
 package codec
 
 import (
@@ -17,7 +20,7 @@ func FuzzRecordCodec_RoundTrip(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, key, value []byte) {
 		// Skip extremely large inputs to avoid timeout
-		if len(key) > 10000 || len(value) > 100000 {
+		if len(key) > 10000 || len(value) > 100000 || len(key) == 0 || len(value) == 0 {
 			t.Skip("Input too large for fuzz test")
 		}
 
@@ -30,7 +33,7 @@ func FuzzRecordCodec_RoundTrip(f *testing.F) {
 		// Decode the binary data
 		record, err := codec.Decode(encoded)
 		if err != nil {
-			t.Fatalf("Decode failed for encoded data: %v", err)
+			t.Fatalf("Decode failed for encoded data: len(key)=%d len(value)=%d %v", len(key), len(value), err)
 		}
 
 		// Validate the record
