@@ -68,6 +68,7 @@ tags
 
 # FreyjaDB specific
 bin/
+freyja
 dist/
 testdata/
 data/
