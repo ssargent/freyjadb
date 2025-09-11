@@ -42,8 +42,11 @@ func TestStartServer(t *testing.T) {
 	// because it blocks on http.ListenAndServe. In integration tests,
 	// we would start it in a goroutine and test the endpoints.
 
+	// Create metrics
+	metrics := NewMetrics()
+
 	// For now, just test that the server can be created
-	server := NewServer(kvStore, serverConfig)
+	server := NewServer(kvStore, serverConfig, metrics)
 	if server == nil {
 		t.Error("Expected server to be created")
 	}

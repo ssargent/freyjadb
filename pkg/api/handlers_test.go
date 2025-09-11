@@ -37,8 +37,11 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 		t.Fatalf("Failed to open KV store: %v", err)
 	}
 
+	// Create metrics
+	metrics := NewMetrics()
+
 	// Create API server
-	server := NewServer(kvStore, ServerConfig{})
+	server := NewServer(kvStore, ServerConfig{}, metrics)
 
 	// Cleanup function
 	cleanup := func() {
