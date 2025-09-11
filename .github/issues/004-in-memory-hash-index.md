@@ -6,6 +6,10 @@ labels: enhancement, priority-high
 assignees: ''
 ---
 
+## Status
+
+**Completed** - HashIndex implementation verified in `pkg/store/hash_index.go` with thread-safe operations and build-from-log functionality.
+
 ## Is your feature request related to a problem? Please describe
 
 FreyjaDB needs an in-memory hash index to provide fast key lookups. The index maps keys to their latest file positions, enabling O(1) average-case lookups for the Bitcask architecture.
@@ -109,12 +113,12 @@ This is item #4 from the project roadmap. The hash index is critical for achievi
 
 ## Acceptance Criteria
 
-- [ ] Can build index by scanning log files
-- [ ] Duplicate keys result in index pointing to newest record
-- [ ] O(1) average-case lookup performance
-- [ ] Thread-safe concurrent operations
-- [ ] Memory usage scales linearly with unique key count
-- [ ] Handles empty keys and large keys correctly
+- [x] Can build index by scanning log files
+- [x] Duplicate keys result in index pointing to newest record
+- [x] O(1) average-case lookup performance
+- [x] Thread-safe concurrent operations
+- [x] Memory usage scales linearly with unique key count
+- [x] Handles empty keys and large keys correctly
 
 ## Priority
 

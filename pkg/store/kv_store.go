@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -377,6 +378,53 @@ func (kv *KVStore) Stats() *StoreStats {
 type StoreStats struct {
 	Keys     int
 	DataSize int64
+}
+
+// Explain gathers diagnostic information about the store
+func (kv *KVStore) Explain(ctx context.Context, opts ExplainOptions) (*ExplainResult, error) {
+	kv.mutex.Lock()
+	defer kv.mutex.Unlock()
+
+	if !kv.isOpen {
+		return nil, &KVError{"store is not open"}
+	}
+
+	res := &ExplainResult{}
+	res.Global.TotalKeys = kv.index.Size()
+	res.Global.ActiveKeys = kv.index.Size() // TODO: Subtract tombstones
+	res.Global.Tombstones = 0               // TODO: Count tombstones
+	res.Global.TotalSizeMB = float64(kv.writer.Size()) / (1024 * 1024)
+	res.Global.LiveSizeMB = res.Global.TotalSizeMB // TODO: Calculate live size
+	res.Global.Uptime = time.Since(time.Now())     // TODO: Track start time
+	res.Global.IndexMemoryMB = 0                   // TODO: Estimate index memory
+
+	// Segments (stub for now)
+	res.Segments = []Segment{
+		{ID: "active", Keys: kv.index.Size(), DeadPct: 0.0, SizeMB: res.Global.TotalSizeMB},
+	}
+
+	// Partitions (stub)
+	res.Partitions = map[string]PKStats{}
+
+	// Samples
+	if opts.WithSamples > 0 {
+		// TODO: Sample actual records
+		res.Diagnostics.Samples = []Sample{}
+	}
+
+	// Warnings
+	if opts.PK != "" {
+		res.Warnings = append(res.Warnings, fmt.Sprintf("Partition filtering not implemented for PK: %s", opts.PK))
+	}
+
+	res.Diagnostics.CRCErrors = 0
+
+	if opts.WithMetrics {
+		res.Diagnostics.Metrics.AvgGetLatencyMs = 0 // TODO: Track metrics
+		res.Diagnostics.Metrics.IORateMBs = 0
+	}
+
+	return res, nil
 }
 
 // KeyValuePair represents a key-value pair for scanning operations

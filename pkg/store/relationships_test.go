@@ -3,7 +3,6 @@ package store
 import (
 	"os"
 	"testing"
-	"time"
 )
 
 func TestRelationships(t *testing.T) {
@@ -17,7 +16,7 @@ func TestRelationships(t *testing.T) {
 	// Create KVStore
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
-		FsyncInterval: time.Second,
+		FsyncInterval: 0, // Immediate sync for testing
 	}
 
 	kv, err := NewKVStore(config)

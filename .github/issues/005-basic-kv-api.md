@@ -6,6 +6,10 @@ labels: enhancement, priority-high
 assignees: ''
 ---
 
+## Status
+
+**Completed** - KVStore implementation verified in `pkg/store/kv_store.go` with Get, Put, Delete operations and crash recovery.
+
 ## Is your feature request related to a problem? Please describe
 
 FreyjaDB needs a complete single-threaded key-value API that ties together the log writer, reader, and hash index to provide the core database operations: Get, Put, and Delete.
@@ -112,13 +116,13 @@ This is item #5 from the project roadmap. This completes the basic single-thread
 
 ## Acceptance Criteria
 
-- [ ] Get operation retrieves values for existing keys
-- [ ] Put operation stores key-value pairs persistently
-- [ ] Delete operation removes keys (returns KeyNotFound on subsequent Get)
-- [ ] Get on non-existent key returns ErrKeyNotFound
-- [ ] All operations maintain consistency between index and log
-- [ ] Proper error handling for I/O failures
-- [ ] Performance meets basic expectations for small datasets
+- [x] Get operation retrieves values for existing keys
+- [x] Put operation stores key-value pairs persistently
+- [x] Delete operation removes keys (returns KeyNotFound on subsequent Get)
+- [x] Get on non-existent key returns ErrKeyNotFound
+- [x] All operations maintain consistency between index and log
+- [x] Proper error handling for I/O failures
+- [x] Performance meets basic expectations for small datasets
 
 ## Priority
 
