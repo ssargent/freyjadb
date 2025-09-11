@@ -19,25 +19,12 @@ Example:
 	Run: func(cmd *cobra.Command, args []string) {
 		key := []byte(args[0])
 
-		// Create KV store
-		config := store.KVStoreConfig{
-			DataDir:       dataDir,
-			FsyncInterval: 0,
-		}
-
-		kv, err := store.NewKVStore(config)
-		if err != nil {
-			fmt.Printf("Error creating store: %v\n", err)
+		// Get store from context
+		kv, ok := cmd.Context().Value("store").(*store.KVStore)
+		if !ok {
+			fmt.Printf("Error: store not found in context\n")
 			return
 		}
-
-		// Open store
-		_, err = kv.Open()
-		if err != nil {
-			fmt.Printf("Error opening store: %v\n", err)
-			return
-		}
-		defer kv.Close()
 
 		// Get value
 		value, err := kv.Get(key)
@@ -52,5 +39,4 @@ Example:
 
 func init() {
 	rootCmd.AddCommand(getCmd)
-	getCmd.Flags().StringVar(&dataDir, "data-dir", "./data", "Data directory for the store")
 }

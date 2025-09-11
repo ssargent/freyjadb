@@ -1,0 +1,123 @@
+definitions:
+  cmd.APIResponse:
+    properties:
+      data: {}
+      error:
+        type: string
+      success:
+        type: boolean
+    type: object
+info:
+  contact: {}
+paths:
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Get the health status of the FreyjaDB server
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/cmd.APIResponse'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Health check
+      tags:
+      - health
+  /kv/{key}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a value for a given key
+      parameters:
+      - description: Key
+        in: path
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: Value
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/cmd.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/cmd.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/cmd.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/cmd.APIResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a value by key
+      tags:
+      - kv
+    put:
+      consumes:
+      - text/plain
+      description: Store a key-value pair in the database
+      parameters:
+      - description: Key
+        in: path
+        name: key
+        required: true
+        type: string
+      - description: Value
+        in: body
+        name: value
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/cmd.APIResponse'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/cmd.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/cmd.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/cmd.APIResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Store a key-value pair
+      tags:
+      - kv
+swagger: "2.0"

@@ -1,30 +1,44 @@
 /*
 Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-
 */
 package cmd
 
 import (
+	"context"
+	"fmt"
 	"os"
+
+	"github.com/ssargent/freyjadb/pkg/store"
 
 	"github.com/spf13/cobra"
 )
 
-
-
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "freyja",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+	Short: "FreyjaDB - Embeddable KV Store",
+	Long: `FreyjaDB is a Bitcask-style embeddable key-value store with
+optional partitioning and sort keys.`,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		dataDir, _ := cmd.Flags().GetString("data-dir")
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			return fmt.Errorf("failed to create data dir: %w", err)
+		}
+		kvStore, err := store.NewKVStore(store.KVStoreConfig{DataDir: dataDir})
+		if err != nil {
+			return fmt.Errorf("failed to create store: %w", err)
+		}
+		recovery, err := kvStore.Open()
+		if err != nil {
+			return fmt.Errorf("failed to open store: %w", err)
+		}
+		if recovery.RecordsTruncated > 0 {
+			fmt.Printf("Recovered from corruption: %d records truncated\n", recovery.RecordsTruncated)
+		}
+		// Store in command context
+		cmd.SetContext(context.WithValue(cmd.Context(), "store", kvStore))
+		return nil
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -37,15 +51,6 @@ func Execute() {
 }
 
 func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.freyja.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// Global data directory flag
+	rootCmd.PersistentFlags().StringP("data-dir", "d", "./data", "Data directory for the store")
 }
-
-
