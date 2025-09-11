@@ -62,20 +62,30 @@ clean:
 	rm -f mem.prof
 	rm -f trace.out
 
-# Run tests
+# Run fast unit tests (excludes fuzz and bench tests)
 test:
-	@echo "$(BLUE)Running tests...$(NC)"
+	@echo "$(BLUE)Running fast unit tests...$(NC)"
+	$(GOTEST) -v -short ./...
+
+# Run all tests including slow ones
+test-all:
+	@echo "$(BLUE)Running all tests (including slow ones)...$(NC)"
 	$(GOTEST) -v ./...
 
 # Run tests with verbose output
 test-verbose:
 	@echo "$(BLUE)Running tests with verbose output...$(NC)"
-	$(GOTEST) -v -race -coverprofile=coverage.out ./...
+	$(GOTEST) -v -race -coverprofile=coverage.out -short ./...
 
 # Run tests with race detection
 test-race:
 	@echo "$(BLUE)Running tests with race detection...$(NC)"
-	$(GOTEST) -race ./...
+	$(GOTEST) -race -short ./...
+
+# Run tests in parallel
+test-parallel:
+	@echo "$(BLUE)Running tests in parallel...$(NC)"
+	$(GOTEST) -v -short -parallel=4 ./...
 
 # Run tests with coverage
 test-cover: test-verbose
@@ -87,7 +97,12 @@ test-cover: test-verbose
 # Run benchmarks
 bench:
 	@echo "$(BLUE)Running benchmarks...$(NC)"
-	$(GOTEST) -bench=. -benchmem ./...
+	$(GOTEST) -bench=. -benchmem -tags=bench ./...
+
+# Run fuzz tests
+fuzz:
+	@echo "$(BLUE)Running fuzz tests...$(NC)"
+	$(GOTEST) -fuzz=. -fuzztime=10s -tags=fuzz ./...
 
 # Run benchmarks with CPU profiling
 bench-cpu:
@@ -244,15 +259,18 @@ help:
 	@echo "  install         Install the binary"
 	@echo ""
 	@echo "$(BLUE)Testing Targets:$(NC)"
-	@echo "  test            Run all tests"
+	@echo "  test            Run fast unit tests (excludes fuzz/bench)"
+	@echo "  test-all        Run all tests including slow ones"
 	@echo "  test-verbose    Run tests with verbose output and coverage"
 	@echo "  test-race       Run tests with race detection"
+	@echo "  test-parallel   Run tests in parallel"
 	@echo "  test-cover      Run tests with coverage report"
 	@echo "  test-integration Run integration tests"
 	@echo "  test-performance Run performance tests"
 	@echo "  bench           Run benchmarks"
 	@echo "  bench-cpu       Run benchmarks with CPU profiling"
 	@echo "  bench-mem       Run benchmarks with memory profiling"
+	@echo "  fuzz            Run fuzz tests"
 	@echo ""
 	@echo "$(BLUE)Code Quality Targets:$(NC)"
 	@echo "  lint            Run linter"
