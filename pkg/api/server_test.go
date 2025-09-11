@@ -7,6 +7,49 @@ import (
 	"github.com/ssargent/freyjadb/pkg/store"
 )
 
+// setupTestServer creates a test server with a temporary KV store
+func setupTestServer(t *testing.T) (*Server, func()) {
+	// Create temporary directory for test
+	tmpDir, err := os.MkdirTemp("", "freyja_server_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	// Create KV store
+	config := store.KVStoreConfig{
+		DataDir:       tmpDir,
+		FsyncInterval: 0,
+	}
+
+	kvStore, err := store.NewKVStore(config)
+	if err != nil {
+		t.Fatalf("Failed to create KV store: %v", err)
+	}
+
+	_, err = kvStore.Open()
+	if err != nil {
+		t.Fatalf("Failed to open KV store: %v", err)
+	}
+
+	// Create server
+	serverConfig := ServerConfig{
+		Port:   0, // Use random available port
+		APIKey: "test-key",
+	}
+
+	// For tests, create a minimal metrics instance to avoid Prometheus registration conflicts
+	metrics := &Metrics{} // Use empty metrics for tests
+	server := NewServer(kvStore, serverConfig, metrics)
+
+	// Return cleanup function
+	cleanup := func() {
+		kvStore.Close()
+		os.RemoveAll(tmpDir)
+	}
+
+	return server, cleanup
+}
+
 func TestStartServer(t *testing.T) {
 	// Create temporary directory for test
 	tmpDir, err := os.MkdirTemp("", "freyja_server_test")
