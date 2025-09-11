@@ -1,0 +1,413 @@
+basePath: /api/v1
+definitions:
+  api.KeyValueResponse:
+    properties:
+      content_type:
+        type: string
+      relationships:
+        items:
+          $ref: '#/definitions/store.RelationshipResult'
+        type: array
+      value: {}
+    type: object
+  api.RelationshipRequest:
+    properties:
+      from_key:
+        type: string
+      relation:
+        type: string
+      to_key:
+        type: string
+    type: object
+  store.Relationship:
+    properties:
+      created_at:
+        type: string
+      from_key:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      relation:
+        type: string
+      to_key:
+        type: string
+    type: object
+  store.RelationshipResult:
+    properties:
+      direction:
+        description: '"outgoing" or "incoming"'
+        type: string
+      other_key:
+        type: string
+      relationship:
+        $ref: '#/definitions/store.Relationship'
+    type: object
+host: localhost:9200
+info:
+  contact: {}
+  description: This is the REST API for FreyjaDB, an embeddable key-value store.
+  title: FreyjaDB REST API
+  version: 1.0.0
+paths:
+  /explain:
+    get:
+      consumes:
+      - application/json
+      description: Get detailed information about database structure and performance
+      parameters:
+      - description: Primary key to explain
+        in: query
+        name: pk
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get database explain information
+      tags:
+      - diagnostics
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Get the health status of the API
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Health check
+      tags:
+      - health
+  /kv:
+    get:
+      consumes:
+      - application/json
+      description: List all keys with optional prefix
+      parameters:
+      - description: Key prefix
+        in: query
+        name: prefix
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: List keys
+      tags:
+      - kv
+  /kv/{key}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete the key-value pair for a given key
+      parameters:
+      - description: Key
+        in: path
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Delete a key-value pair
+      tags:
+      - kv
+    get:
+      consumes:
+      - application/json
+      description: Retrieve the value for a given key. Use ?include=relationships
+        to include relationship data.
+      parameters:
+      - description: Key
+        in: path
+        name: key
+        required: true
+        type: string
+      - description: Include additional data (relationships)
+        in: query
+        name: include
+        type: string
+      produces:
+      - application/octet-stream
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.KeyValueResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get a value by key
+      tags:
+      - kv
+    put:
+      consumes:
+      - application/octet-stream
+      - application/json
+      description: Store a key-value pair in the database
+      parameters:
+      - description: Key
+        in: path
+        name: key
+        required: true
+        type: string
+      - description: Value
+        in: body
+        name: body
+        required: true
+        schema:
+          items:
+            type: integer
+          type: array
+      - description: Content type (application/json or application/octet-stream)
+        in: header
+        name: Content-Type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Put a key-value pair
+      tags:
+      - kv
+  /relationships:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a relationship between two keys
+      parameters:
+      - description: Relationship request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.RelationshipRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Delete a relationship
+      tags:
+      - relationships
+    get:
+      consumes:
+      - application/json
+      description: Get relationships for a key with optional filters
+      parameters:
+      - description: Key to get relationships for
+        in: query
+        name: key
+        type: string
+      - description: Direction (both, incoming, outgoing)
+        in: query
+        name: direction
+        type: string
+      - description: Relationship type filter
+        in: query
+        name: relation
+        type: string
+      - description: Maximum number of results
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get relationships
+      tags:
+      - relationships
+    post:
+      consumes:
+      - application/json
+      description: Create a relationship between two keys
+      parameters:
+      - description: Relationship request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.RelationshipRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Create a relationship
+      tags:
+      - relationships
+  /stats:
+    get:
+      consumes:
+      - application/json
+      description: Get statistics about the database including key count and data
+        size
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get database statistics
+      tags:
+      - diagnostics
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: X-API-Key
+    type: apiKey
+swagger: "2.0"

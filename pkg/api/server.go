@@ -1,20 +1,14 @@
-/*
-FreyjaDB REST API
-
-This is the REST API for FreyjaDB, an embeddable key-value store.
-
-Version: 1.0.0
-Host: localhost:8080
-BasePath: /api/v1
-
-SecurityDefinitions:
-  - ApiKeyAuth:
-    type: apiKey
-    in: header
-    name: X-API-Key
-
-swagger:meta
-*/
+// Package api FreyjaDB REST API
+//
+// @title           FreyjaDB REST API
+// @version         1.0.0
+// @description     This is the REST API for FreyjaDB, an embeddable key-value store.
+// @host            localhost:9200
+// @BasePath        /api/v1
+//
+// @securityDefinitions.apikey ApiKeyAuth
+// @in              header
+// @name            X-API-Key
 package api
 
 import (
@@ -27,11 +21,16 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ssargent/freyjadb/pkg/store"
-	httpSwagger "github.com/swaggo/http-swagger"
+	"github.com/swaggo/swag"
 )
 
 // StartServer starts the HTTP server with all routes configured
 func StartServer(store *store.KVStore, config ServerConfig) error {
+	// Set Swagger host with port
+	if SwaggerInfo != nil {
+		SwaggerInfo.Host = fmt.Sprintf("localhost:%d", config.Port)
+	}
+
 	// Initialize metrics
 	metrics := NewMetrics()
 
@@ -78,9 +77,67 @@ func StartServer(store *store.KVStore, config ServerConfig) error {
 	})
 
 	// Swagger documentation (unprotected)
-	r.Get("/swagger/*", httpSwagger.Handler(
-		httpSwagger.URL(fmt.Sprintf("http://localhost:%d/swagger/doc.json", config.Port)),
-	))
+	r.Get("/swagger/*", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if path == "/swagger/" || path == "/swagger/index.html" {
+			// Serve the Swagger UI HTML
+			w.Header().Set("Content-Type", "text/html")
+			html := `<!DOCTYPE html>
+<html>
+<head>
+	 <title>FreyjaDB API Documentation</title>
+	 <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@3.25.0/swagger-ui.css" />
+</head>
+<body>
+	 <div id="swagger-ui"></div>
+	 <script src="https://unpkg.com/swagger-ui-dist@3.25.0/swagger-ui-bundle.js"></script>
+	 <script>
+	   window.onload = function() {
+	     SwaggerUIBundle({
+	       url: '/swagger/swagger.json',
+	       dom_id: '#swagger-ui',
+	       presets: [
+	         SwaggerUIBundle.presets.apis,
+	         SwaggerUIBundle.presets.standalone
+	       ]
+	     });
+	   };
+	 </script>
+</body>
+</html>`
+			w.Write([]byte(html))
+			return
+		}
+
+		if path == "/swagger/swagger.json" {
+			// Serve the dynamically generated Swagger JSON
+			doc, err := swag.ReadDoc("swagger")
+			if err != nil {
+				fmt.Printf("Error generating swagger doc: %v\n", err)
+				http.Error(w, "Failed to generate Swagger documentation", 500)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(doc))
+			return
+		}
+
+		if path == "/swagger/swagger.yaml" {
+			// Serve the dynamically generated Swagger YAML
+			doc, err := swag.ReadDoc("swagger")
+			if err != nil {
+				fmt.Printf("Error generating swagger doc: %v\n", err)
+				http.Error(w, "Failed to generate Swagger documentation", 500)
+				return
+			}
+			w.Header().Set("Content-Type", "application/yaml")
+			w.Write([]byte(doc)) // Note: This serves JSON as YAML, for true YAML conversion you'd need a JSON to YAML converter
+			return
+		}
+
+		// For any other paths, return 404
+		http.NotFound(w, r)
+	})
 
 	// Start background metrics updater
 	go server.startMetricsUpdater()
