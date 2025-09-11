@@ -35,7 +35,8 @@ Example:
 		}
 
 		// Open store
-		if err := kv.Open(); err != nil {
+		_, err = kv.Open()
+		if err != nil {
 			fmt.Printf("Error opening store: %v\n", err)
 			return
 		}

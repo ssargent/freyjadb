@@ -25,7 +25,8 @@ func TestKVStore_BasicOperations(t *testing.T) {
 	}
 
 	// Open the store
-	if err := store.Open(); err != nil {
+	_, err = store.Open()
+	if err != nil {
 		t.Fatalf("Failed to open KV store: %v", err)
 	}
 	defer store.Close()
@@ -85,7 +86,8 @@ func TestKVStore_UpdateValue(t *testing.T) {
 		t.Fatalf("Failed to create KV store: %v", err)
 	}
 
-	if err := store.Open(); err != nil {
+	_, err = store.Open()
+	if err != nil {
 		t.Fatalf("Failed to open KV store: %v", err)
 	}
 	defer store.Close()
@@ -142,7 +144,8 @@ func TestKVStore_Reopen(t *testing.T) {
 		t.Fatalf("Failed to create first KV store: %v", err)
 	}
 
-	if err := store1.Open(); err != nil {
+	_, err = store1.Open()
+	if err != nil {
 		t.Fatalf("Failed to open first KV store: %v", err)
 	}
 
@@ -164,7 +167,8 @@ func TestKVStore_Reopen(t *testing.T) {
 		t.Fatalf("Failed to create second KV store: %v", err)
 	}
 
-	if err := store2.Open(); err != nil {
+	_, err = store2.Open()
+	if err != nil {
 		t.Fatalf("Failed to open second KV store: %v", err)
 	}
 	defer store2.Close()
@@ -197,7 +201,8 @@ func TestKVStore_Stats(t *testing.T) {
 		t.Fatalf("Failed to create KV store: %v", err)
 	}
 
-	if err := store.Open(); err != nil {
+	_, err = store.Open()
+	if err != nil {
 		t.Fatalf("Failed to open KV store: %v", err)
 	}
 	defer store.Close()
@@ -234,5 +239,135 @@ func TestKVStore_Stats(t *testing.T) {
 
 	if stats.DataSize <= 0 {
 		t.Errorf("Expected positive data size, got %d", stats.DataSize)
+	}
+}
+
+func TestKVStore_CrashSafeReopen_CleanFile(t *testing.T) {
+	// Test clean restart with no corruption
+	tmpDir, err := os.MkdirTemp("", "freyja_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	config := KVStoreConfig{
+		DataDir:       tmpDir,
+		FsyncInterval: 0,
+	}
+
+	// First instance - create and populate data
+	store1, err := NewKVStore(config)
+	if err != nil {
+		t.Fatalf("Failed to create first KV store: %v", err)
+	}
+
+	recoveryResult, err := store1.Open()
+	if err != nil {
+		t.Fatalf("Failed to open first KV store: %v", err)
+	}
+
+	// Verify clean startup (no corruption)
+	if recoveryResult.RecordsTruncated != 0 {
+		t.Errorf("Expected no records truncated on clean startup, got %d", recoveryResult.RecordsTruncated)
+	}
+
+	if recoveryResult.FileSizeBefore != 0 {
+		t.Errorf("Expected file size before to be 0 on clean startup, got %d", recoveryResult.FileSizeBefore)
+	}
+
+	// Add some data
+	keys := [][]byte{[]byte("key1"), []byte("key2"), []byte("key3")}
+	values := [][]byte{[]byte("value1"), []byte("value2"), []byte("value3")}
+
+	for i, key := range keys {
+		if err := store1.Put(key, values[i]); err != nil {
+			t.Fatalf("Failed to put key %d: %v", i, err)
+		}
+	}
+
+	if err := store1.Close(); err != nil {
+		t.Fatalf("Failed to close first KV store: %v", err)
+	}
+
+	// Second instance - reopen and verify recovery
+	store2, err := NewKVStore(config)
+	if err != nil {
+		t.Fatalf("Failed to create second KV store: %v", err)
+	}
+
+	recoveryResult2, err := store2.Open()
+	if err != nil {
+		t.Fatalf("Failed to open second KV store: %v", err)
+	}
+	defer store2.Close()
+
+	// Verify recovery statistics
+	if recoveryResult2.RecordsValidated != 3 {
+		t.Errorf("Expected 3 records validated, got %d", recoveryResult2.RecordsValidated)
+	}
+
+	if recoveryResult2.RecordsTruncated != 0 {
+		t.Errorf("Expected no records truncated, got %d", recoveryResult2.RecordsTruncated)
+	}
+
+	if !recoveryResult2.IndexRebuilt {
+		t.Error("Expected index to be rebuilt")
+	}
+
+	// Verify data integrity
+	for i, key := range keys {
+		retrieved, err := store2.Get(key)
+		if err != nil {
+			t.Fatalf("Failed to get key %d: %v", i, err)
+		}
+		if string(retrieved) != string(values[i]) {
+			t.Errorf("Data mismatch for key %d: got %s, want %s", i, string(retrieved), string(values[i]))
+		}
+	}
+}
+
+// TODO: Add corruption test once file format is better understood
+// The current implementation provides the framework for corruption detection
+// but requires deeper understanding of the exact record format for reliable testing
+
+func TestKVStore_CrashSafeReopen_EmptyFile(t *testing.T) {
+	// Test recovery from empty/non-existent file
+	tmpDir, err := os.MkdirTemp("", "freyja_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	config := KVStoreConfig{
+		DataDir:       tmpDir,
+		FsyncInterval: 0,
+	}
+
+	store, err := NewKVStore(config)
+	if err != nil {
+		t.Fatalf("Failed to create KV store: %v", err)
+	}
+
+	recoveryResult, err := store.Open()
+	if err != nil {
+		t.Fatalf("Failed to open KV store: %v", err)
+	}
+	defer store.Close()
+
+	// Verify empty file recovery
+	if recoveryResult.RecordsValidated != 0 {
+		t.Errorf("Expected 0 records validated for empty file, got %d", recoveryResult.RecordsValidated)
+	}
+
+	if recoveryResult.RecordsTruncated != 0 {
+		t.Errorf("Expected 0 records truncated for empty file, got %d", recoveryResult.RecordsTruncated)
+	}
+
+	if recoveryResult.FileSizeBefore != 0 {
+		t.Errorf("Expected file size before to be 0 for empty file, got %d", recoveryResult.FileSizeBefore)
+	}
+
+	if !recoveryResult.IndexRebuilt {
+		t.Error("Expected index to be marked as rebuilt even for empty file")
 	}
 }

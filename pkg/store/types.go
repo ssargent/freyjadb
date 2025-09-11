@@ -38,6 +38,16 @@ type KVStoreConfig struct {
 	FsyncInterval time.Duration // Fsync interval for durability
 }
 
+// RecoveryResult holds statistics about crash recovery operations
+type RecoveryResult struct {
+	RecordsValidated int64 // Number of records successfully validated
+	RecordsTruncated int64 // Number of corrupted records truncated
+	FileSizeBefore   int64 // File size before recovery
+	FileSizeAfter    int64 // File size after recovery
+	IndexRebuilt     bool  // Whether index was rebuilt
+	RecoveryTime     int64 // Time taken for recovery in nanoseconds
+}
+
 // RecordIterator provides streaming access to records
 type RecordIterator interface {
 	Next() bool

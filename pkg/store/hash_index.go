@@ -1,6 +1,7 @@
 package store
 
 import (
+	"strings"
 	"sync"
 )
 
@@ -71,6 +72,52 @@ func (idx *HashIndex) Keys() []string {
 		keys = append(keys, key)
 	}
 	return keys
+}
+
+// KeysWithPrefix returns all keys that start with the given prefix
+func (idx *HashIndex) KeysWithPrefix(prefix string) []string {
+	idx.mutex.RLock()
+	defer idx.mutex.RUnlock()
+
+	var keys []string
+	for key := range idx.entries {
+		if strings.HasPrefix(key, prefix) {
+			keys = append(keys, key)
+		}
+	}
+	return keys
+}
+
+// ScanPrefix returns a channel of keys that match the prefix
+// This allows for streaming results and better memory management
+func (idx *HashIndex) ScanPrefix(prefix string) <-chan string {
+	ch := make(chan string, 100) // Buffered channel for performance
+
+	go func() {
+		defer close(ch)
+
+		idx.mutex.RLock()
+		keys := make([]string, 0, len(idx.entries))
+
+		// Collect matching keys
+		for key := range idx.entries {
+			if strings.HasPrefix(key, prefix) {
+				keys = append(keys, key)
+			}
+		}
+		idx.mutex.RUnlock()
+
+		// Send keys through channel
+		for _, key := range keys {
+			select {
+			case ch <- key:
+			case <-ch: // Channel closed by receiver
+				return
+			}
+		}
+	}()
+
+	return ch
 }
 
 // BuildFromLog scans a log file and populates the index

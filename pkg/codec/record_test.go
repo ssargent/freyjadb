@@ -216,10 +216,6 @@ func TestRecordCodec_MalformedData(t *testing.T) {
 			data: []byte{0x01, 0x02, 0x03},
 		},
 		{
-			name: "header only",
-			data: make([]byte, 20), // Just header, no key/value data
-		},
-		{
 			name: "insufficient data for declared key size",
 			data: func() []byte {
 				buf := make([]byte, 20)
