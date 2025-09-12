@@ -116,6 +116,11 @@ func (kv *KVStore) Get(key []byte) ([]byte, error) {
 		return nil, ErrKeyNotFound
 	}
 
+	// Force sync to ensure all buffered writes are on disk
+	if err := kv.writer.Sync(); err != nil {
+		return nil, err
+	}
+
 	// Read record directly from the stored offset
 	record, err := kv.reader.ReadAt(entry.Offset)
 	if err != nil {

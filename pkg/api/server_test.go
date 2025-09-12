@@ -39,7 +39,10 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 
 	// For tests, create a minimal metrics instance to avoid Prometheus registration conflicts
 	metrics := &Metrics{} // Use empty metrics for tests
-	server := NewServer(kvStore, serverConfig, metrics)
+
+	// Create mock system service for tests
+	systemService := &SystemService{} // Will be closed, so no-op is fine
+	server := NewServer(kvStore, systemService, serverConfig, metrics)
 
 	// Return cleanup function
 	cleanup := func() {
@@ -89,7 +92,8 @@ func TestStartServer(t *testing.T) {
 	metrics := NewMetrics()
 
 	// For now, just test that the server can be created
-	server := NewServer(kvStore, serverConfig, metrics)
+	systemService := &SystemService{} // Will be closed, so no-op is fine
+	server := NewServer(kvStore, systemService, serverConfig, metrics)
 	if server == nil {
 		t.Error("Expected server to be created")
 	}

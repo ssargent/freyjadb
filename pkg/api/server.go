@@ -15,17 +15,17 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/ssargent/freyjadb/pkg/store"
 	"github.com/swaggo/swag"
 )
 
 // StartServer starts the HTTP server with all routes configured
-func StartServer(store *store.KVStore, config ServerConfig) error {
+func StartServer(store IKVStore, config ServerConfig) error {
 	// Set Swagger host with port
 	if SwaggerInfo != nil {
 		SwaggerInfo.Host = fmt.Sprintf("localhost:%d", config.Port)
@@ -34,7 +34,38 @@ func StartServer(store *store.KVStore, config ServerConfig) error {
 	// Initialize metrics
 	metrics := NewMetrics()
 
-	server := NewServer(store, config, metrics)
+	// Initialize system service
+	systemConfig := SystemConfig{
+		DataDir:          config.SystemDataDir,
+		EncryptionKey:    config.SystemEncryptionKey,
+		EnableEncryption: config.EnableEncryption,
+	}
+	systemService, err := NewSystemService(systemConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create system service: %w", err)
+	}
+
+	// Open system service
+	if err := systemService.Open(); err != nil {
+		return fmt.Errorf("failed to open system service: %w", err)
+	}
+
+	// Initialize system API key if provided
+	if config.SystemKey != "" {
+		systemAPIKey := APIKey{
+			ID:          "system-root",
+			Key:         config.SystemKey,
+			Description: "System root API key for administrative operations",
+			CreatedAt:   time.Now(),
+			IsActive:    true,
+		}
+
+		if err := systemService.StoreAPIKey(systemAPIKey); err != nil {
+			return fmt.Errorf("failed to store system API key: %w", err)
+		}
+	}
+
+	server := NewServer(store, systemService, config, metrics)
 
 	r := chi.NewRouter()
 
@@ -55,7 +86,12 @@ func StartServer(store *store.KVStore, config ServerConfig) error {
 
 	// API key authentication middleware for protected routes
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(metrics.InstrumentAuthMiddleware(apiKeyMiddleware(config.APIKey)))
+		// Use system service for authentication if available, otherwise fall back to config
+		if systemService.IsOpen() {
+			r.Use(metrics.InstrumentAuthMiddleware(systemApiKeyMiddleware(systemService)))
+		} else {
+			r.Use(metrics.InstrumentAuthMiddleware(apiKeyMiddleware(config.APIKey)))
+		}
 
 		// Health check
 		r.Get("/health", metrics.InstrumentHandler("GET", "/api/v1/health", server.handleHealth))
@@ -74,6 +110,21 @@ func StartServer(store *store.KVStore, config ServerConfig) error {
 		// Diagnostics
 		r.Get("/explain", metrics.InstrumentHandler("GET", "/api/v1/explain", server.handleExplain))
 		r.Get("/stats", metrics.InstrumentHandler("GET", "/api/v1/stats", server.handleStats))
+
+		// System administration endpoints (require system API key)
+		r.Route("/system", func(r chi.Router) {
+			r.Use(metrics.InstrumentAuthMiddleware(systemApiKeyMiddleware(systemService)))
+
+			// API key management
+			r.Post("/api-keys", metrics.InstrumentHandler("POST", "/api/v1/system/api-keys", server.handleCreateAPIKey))
+			r.Get("/api-keys", metrics.InstrumentHandler("GET", "/api/v1/system/api-keys", server.handleListAPIKeys))
+			r.Get("/api-keys/{id}", metrics.InstrumentHandler("GET", "/api/v1/system/api-keys/{id}", server.handleGetAPIKey))
+			r.Delete("/api-keys/{id}", metrics.InstrumentHandler("DELETE", "/api/v1/system/api-keys/{id}", server.handleDeleteAPIKey))
+
+			// System configuration
+			r.Get("/config/{key}", metrics.InstrumentHandler("GET", "/api/v1/system/config/{key}", server.handleGetSystemConfig))
+			r.Put("/config/{key}", metrics.InstrumentHandler("PUT", "/api/v1/system/config/{key}", server.handleSetSystemConfig))
+		})
 	})
 
 	// Swagger documentation (unprotected)
