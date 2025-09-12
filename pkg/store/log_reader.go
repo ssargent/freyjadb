@@ -108,35 +108,36 @@ func (r *LogReader) ReadNext() (*codec.Record, error) {
 
 // ReadAt reads a record at a specific offset
 func (r *LogReader) ReadAt(offset int64) (*codec.Record, error) {
-	// Reopen the file to ensure we see the latest data
-	r.file.Close()
+	// Always reopen the file to ensure we see the latest data
+	if r.file != nil {
+		r.file.Close()
+	}
+
 	file, err := os.Open(r.config.FilePath)
 	if err != nil {
 		return nil, err
 	}
-	r.file = file
-	r.reader.Reset(r.file)
 
 	// Seek to the specified offset
-	if _, err := r.file.Seek(offset, 0); err != nil {
+	if _, err := file.Seek(offset, 0); err != nil {
+		file.Close()
 		return nil, err
 	}
 
-	r.offset = offset
-
 	// Read the record header (20 bytes: CRC32 + KeySize + ValueSize + Timestamp)
 	header := make([]byte, 20)
-	n, err := r.file.Read(header)
+	n, err := file.Read(header)
 	if err != nil {
+		file.Close()
 		if err == io.EOF || n < 20 {
 			return nil, ErrCorruption
 		}
 		return nil, err
 	}
-	r.offset += int64(n)
 
 	// Decode header to get sizes
 	if len(header) < 20 {
+		file.Close()
 		return nil, ErrCorruption
 	}
 
@@ -147,6 +148,7 @@ func (r *LogReader) ReadAt(offset int64) (*codec.Record, error) {
 	dataSize := keySize + valueSize
 	if dataSize == 0 {
 		// This might be a tombstone or empty record
+		file.Close()
 		record := &codec.Record{
 			CRC32:     uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16 | uint32(header[3])<<24,
 			KeySize:   uint32(keySize),
@@ -159,14 +161,16 @@ func (r *LogReader) ReadAt(offset int64) (*codec.Record, error) {
 	}
 
 	data := make([]byte, dataSize)
-	n, err = r.file.Read(data)
+	n, err = file.Read(data)
 	if err != nil {
+		file.Close()
 		if err == io.EOF || n < dataSize {
 			return nil, ErrCorruption
 		}
 		return nil, err
 	}
-	r.offset += int64(n)
+
+	file.Close()
 
 	// Construct full record data for decoding
 	fullData := make([]byte, 20+dataSize)
@@ -193,7 +197,7 @@ func (r *LogReader) Seek(offset int64) error {
 		return err
 	}
 
-	r.reader.Reset(r.file)
+	r.reader = bufio.NewReader(r.file) // Recreate reader to clear buffer
 	r.offset = offset
 	return nil
 }

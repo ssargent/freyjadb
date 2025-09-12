@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -21,17 +22,19 @@ type KeyValueResponse struct {
 
 // Server holds the API server state
 type Server struct {
-	store   *store.KVStore
-	config  ServerConfig
-	metrics *Metrics
+	store         IKVStore
+	systemService *SystemService
+	config        ServerConfig
+	metrics       *Metrics
 }
 
 // NewServer creates a new API server
-func NewServer(store *store.KVStore, config ServerConfig, metrics *Metrics) *Server {
+func NewServer(store IKVStore, systemService *SystemService, config ServerConfig, metrics *Metrics) *Server {
 	return &Server{
-		store:   store,
-		config:  config,
-		metrics: metrics,
+		store:         store,
+		systemService: systemService,
+		config:        config,
+		metrics:       metrics,
 	}
 }
 
@@ -69,7 +72,9 @@ func (s *Server) handlePut(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	key := chi.URLParam(r, "key")
 	if key == "" {
-		s.metrics.RecordDBOperation("put", false, time.Since(start))
+		if s.metrics != nil {
+			s.metrics.RecordDBOperation("put", false, time.Since(start))
+		}
 		sendError(w, "Key is required", http.StatusBadRequest)
 		return
 	}
@@ -78,7 +83,9 @@ func (s *Server) handlePut(w http.ResponseWriter, r *http.Request) {
 	body := make([]byte, r.ContentLength)
 	_, err := r.Body.Read(body)
 	if err != nil && err.Error() != "EOF" {
-		s.metrics.RecordDBOperation("put", false, time.Since(start))
+		if s.metrics != nil {
+			s.metrics.RecordDBOperation("put", false, time.Since(start))
+		}
 		sendError(w, "Failed to read request body", http.StatusBadRequest)
 		return
 	}
@@ -94,14 +101,18 @@ func (s *Server) handlePut(w http.ResponseWriter, r *http.Request) {
 		// Validate that the body is valid JSON
 		var jsonData interface{}
 		if err := json.Unmarshal(body, &jsonData); err != nil {
-			s.metrics.RecordDBOperation("put", false, time.Since(start))
+			if s.metrics != nil {
+				s.metrics.RecordDBOperation("put", false, time.Since(start))
+			}
 			sendError(w, "Invalid JSON in request body", http.StatusBadRequest)
 			return
 		}
 		// Re-marshal to ensure consistent formatting
 		formattedJSON, err := json.Marshal(jsonData)
 		if err != nil {
-			s.metrics.RecordDBOperation("put", false, time.Since(start))
+			if s.metrics != nil {
+				s.metrics.RecordDBOperation("put", false, time.Since(start))
+			}
 			sendError(w, "Failed to format JSON", http.StatusInternalServerError)
 			return
 		}
@@ -113,13 +124,25 @@ func (s *Server) handlePut(w http.ResponseWriter, r *http.Request) {
 	// Encode data with content type metadata
 	encodedData := encodeDataWithContentType(dataToStore, contentType)
 
-	if err := s.store.Put([]byte(key), encodedData); err != nil {
-		s.metrics.RecordDBOperation("put", false, time.Since(start))
+	unescapedKey, err := url.QueryUnescape(chi.URLParam(r, "key"))
+	if err != nil {
+		if s.metrics != nil {
+			s.metrics.RecordDBOperation("put", false, time.Since(start))
+		}
+		sendError(w, "Invalid key encoding", http.StatusBadRequest)
+		return
+	}
+	if err := s.store.Put([]byte(unescapedKey), encodedData); err != nil {
+		if s.metrics != nil {
+			s.metrics.RecordDBOperation("put", false, time.Since(start))
+		}
 		sendError(w, fmt.Sprintf("Failed to put key-value: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	s.metrics.RecordDBOperation("put", true, time.Since(start))
+	if s.metrics != nil {
+		s.metrics.RecordDBOperation("put", true, time.Since(start))
+	}
 	sendSuccess(w, map[string]string{"message": "Key-value pair stored successfully"})
 }
 
@@ -502,4 +525,188 @@ func (s *Server) startMetricsUpdater() {
 		stats := s.store.Stats()
 		s.metrics.UpdateDBStats(stats.Keys, stats.DataSize)
 	}
+}
+
+// System API handlers
+
+// handleCreateAPIKey godoc
+//
+//	@Summary		Create a new API key
+//	@Description	Create a new API key for user authentication
+//	@Tags			system
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		APIKey					true	"API key details"
+//	@Success		200		{object}	map[string]interface{}
+//	@Failure		400		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/system/api-keys [post]
+//	@Security		ApiKeyAuth
+func (s *Server) handleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
+	var apiKey APIKey
+	if err := json.NewDecoder(r.Body).Decode(&apiKey); err != nil {
+		sendError(w, "Invalid JSON request", http.StatusBadRequest)
+		return
+	}
+
+	if apiKey.ID == "" || apiKey.Key == "" {
+		sendError(w, "id and key are required", http.StatusBadRequest)
+		return
+	}
+
+	// Set creation time if not provided
+	if apiKey.CreatedAt.IsZero() {
+		apiKey.CreatedAt = time.Now()
+	}
+
+	// Set active if not specified
+	if !apiKey.IsActive {
+		apiKey.IsActive = true
+	}
+
+	if err := s.systemService.StoreAPIKey(apiKey); err != nil {
+		sendError(w, fmt.Sprintf("Failed to create API key: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	sendSuccess(w, map[string]interface{}{
+		"message": "API key created successfully",
+		"id":      apiKey.ID,
+	})
+}
+
+// handleListAPIKeys godoc
+//
+//	@Summary		List all API keys
+//	@Description	Get a list of all API key IDs
+//	@Tags			system
+//	@Produce		json
+//	@Success		200	{object}	map[string]interface{}
+//	@Failure		500	{object}	map[string]string
+//	@Router			/system/api-keys [get]
+//	@Security		ApiKeyAuth
+func (s *Server) handleListAPIKeys(w http.ResponseWriter, r *http.Request) {
+	keys, err := s.systemService.ListAPIKeys()
+	if err != nil {
+		sendError(w, fmt.Sprintf("Failed to list API keys: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	sendSuccess(w, map[string]interface{}{"api_keys": keys})
+}
+
+// handleGetAPIKey godoc
+//
+//	@Summary		Get API key details
+//	@Description	Get details of a specific API key
+//	@Tags			system
+//	@Produce		json
+//	@Param			id	path		string	true	"API key ID"
+//	@Success		200	{object}	APIKey
+//	@Failure		404	{object}	map[string]string
+//	@Failure		500	{object}	map[string]string
+//	@Router			/system/api-keys/{id} [get]
+//	@Security		ApiKeyAuth
+func (s *Server) handleGetAPIKey(w http.ResponseWriter, r *http.Request) {
+	keyID := chi.URLParam(r, "id")
+	if keyID == "" {
+		sendError(w, "API key ID is required", http.StatusBadRequest)
+		return
+	}
+
+	apiKey, err := s.systemService.GetAPIKey(keyID)
+	if err != nil {
+		sendError(w, fmt.Sprintf("Failed to get API key: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	sendSuccess(w, apiKey)
+}
+
+// handleDeleteAPIKey godoc
+//
+//	@Summary		Delete an API key
+//	@Description	Delete a specific API key
+//	@Tags			system
+//	@Produce		json
+//	@Param			id	path		string	true	"API key ID"
+//	@Success		200	{object}	map[string]string
+//	@Failure		500	{object}	map[string]string
+//	@Router			/system/api-keys/{id} [delete]
+//	@Security		ApiKeyAuth
+func (s *Server) handleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
+	keyID := chi.URLParam(r, "id")
+	if keyID == "" {
+		sendError(w, "API key ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.systemService.DeleteAPIKey(keyID); err != nil {
+		sendError(w, fmt.Sprintf("Failed to delete API key: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	sendSuccess(w, map[string]string{"message": "API key deleted successfully"})
+}
+
+// handleGetSystemConfig godoc
+//
+//	@Summary		Get system configuration
+//	@Description	Get a system configuration value
+//	@Tags			system
+//	@Produce		json
+//	@Param			key	path		string	true	"Configuration key"
+//	@Success		200	{object}	map[string]interface{}
+//	@Failure		500	{object}	map[string]string
+//	@Router			/system/config/{key} [get]
+//	@Security		ApiKeyAuth
+func (s *Server) handleGetSystemConfig(w http.ResponseWriter, r *http.Request) {
+	key := chi.URLParam(r, "key")
+	if key == "" {
+		sendError(w, "Configuration key is required", http.StatusBadRequest)
+		return
+	}
+
+	var value interface{}
+	if err := s.systemService.GetSystemConfig(key, &value); err != nil {
+		sendError(w, fmt.Sprintf("Failed to get config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	sendSuccess(w, map[string]interface{}{"key": key, "value": value})
+}
+
+// handleSetSystemConfig godoc
+//
+//	@Summary		Set system configuration
+//	@Description	Set a system configuration value
+//	@Tags			system
+//	@Accept			json
+//	@Produce		json
+//	@Param			key		path		string					true	"Configuration key"
+//	@Param			value	body		interface{}			true	"Configuration value"
+//	@Success		200		{object}	map[string]string
+//	@Failure		400		{object}	map[string]string
+//	@Failure		500		{object}	map[string]string
+//	@Router			/system/config/{key} [put]
+//	@Security		ApiKeyAuth
+func (s *Server) handleSetSystemConfig(w http.ResponseWriter, r *http.Request) {
+	key := chi.URLParam(r, "key")
+	if key == "" {
+		sendError(w, "Configuration key is required", http.StatusBadRequest)
+		return
+	}
+
+	var value interface{}
+	if err := json.NewDecoder(r.Body).Decode(&value); err != nil {
+		sendError(w, "Invalid JSON request", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.systemService.StoreSystemConfig(key, value); err != nil {
+		sendError(w, fmt.Sprintf("Failed to set config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	sendSuccess(w, map[string]string{"message": "Configuration updated successfully"})
 }
