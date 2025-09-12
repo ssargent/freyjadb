@@ -15,9 +15,14 @@ A **small, embeddable key-value database** built with ❤️ in Go. FreyjaDB pro
 ### 1. Initialize the System Store
 
 ```bash
-# Initialize with encryption (recommended)
+# Initialize with encryption and auto-generated API key (recommended)
 freyja init --system-key="your-secure-system-key-here" --data-dir="./data"
+
+# Or specify a custom system API key
+freyja init --system-key="your-secure-system-key-here" --system-api-key="your-custom-api-key" --data-dir="./data"
 ```
+
+**Security Enhancement:** The `--system-key` is now used only for data encryption, while `--system-api-key` is used for API authentication. If you don't provide `--system-api-key`, a secure random key will be generated and displayed.
 
 ### 2. Start the Server
 
