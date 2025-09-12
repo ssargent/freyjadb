@@ -83,9 +83,17 @@ func (r *Record) Size() int {
 
 // NewRecord creates a new record with current timestamp
 func NewRecord(key, value []byte) *Record {
+	keyLen := len(key)
+	valLen := len(value)
+	if keyLen > int(^uint32(0)) {
+		panic("key too large")
+	}
+	if valLen > int(^uint32(0)) {
+		panic("value too large")
+	}
 	return &Record{
-		KeySize:   uint32(len(key)),
-		ValueSize: uint32(len(value)),
+		KeySize:   uint32(keyLen),
+		ValueSize: uint32(valLen),
 		Timestamp: uint64(time.Now().UnixNano()),
 		Key:       key,
 		Value:     value,
@@ -99,13 +107,23 @@ func (r *Record) calculateCRC32() uint32 {
 	crc := crc32.NewIEEE()
 
 	// Write header fields (excluding CRC32)
-	binary.Write(crc, binary.LittleEndian, r.KeySize)
-	binary.Write(crc, binary.LittleEndian, r.ValueSize)
-	binary.Write(crc, binary.LittleEndian, r.Timestamp)
+	if err := binary.Write(crc, binary.LittleEndian, r.KeySize); err != nil {
+		return 0
+	}
+	if err := binary.Write(crc, binary.LittleEndian, r.ValueSize); err != nil {
+		return 0
+	}
+	if err := binary.Write(crc, binary.LittleEndian, r.Timestamp); err != nil {
+		return 0
+	}
 
 	// Write data
-	crc.Write(r.Key)
-	crc.Write(r.Value)
+	if _, err := crc.Write(r.Key); err != nil {
+		return 0
+	}
+	if _, err := crc.Write(r.Value); err != nil {
+		return 0
+	}
 
 	return crc.Sum32()
 }

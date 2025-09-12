@@ -70,9 +70,11 @@ func (r *LogReader) ReadNext() (*codec.Record, error) {
 			CRC32:     uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16 | uint32(header[3])<<24,
 			KeySize:   uint32(keySize),
 			ValueSize: uint32(valueSize),
-			Timestamp: uint64(header[12]) | uint64(header[13])<<8 | uint64(header[14])<<16 | uint64(header[15])<<24 | uint64(header[16])<<32 | uint64(header[17])<<40 | uint64(header[18])<<48 | uint64(header[19])<<56,
-			Key:       []byte{},
-			Value:     []byte{},
+			Timestamp: uint64(header[12]) | uint64(header[13])<<8 | uint64(header[14])<<16 |
+				uint64(header[15])<<24 | uint64(header[16])<<32 | uint64(header[17])<<40 |
+				uint64(header[18])<<48 | uint64(header[19])<<56,
+			Key:   []byte{},
+			Value: []byte{},
 		}
 		return record, nil
 	}
@@ -153,9 +155,11 @@ func (r *LogReader) ReadAt(offset int64) (*codec.Record, error) {
 			CRC32:     uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16 | uint32(header[3])<<24,
 			KeySize:   uint32(keySize),
 			ValueSize: uint32(valueSize),
-			Timestamp: uint64(header[12]) | uint64(header[13])<<8 | uint64(header[14])<<16 | uint64(header[15])<<24 | uint64(header[16])<<32 | uint64(header[17])<<40 | uint64(header[18])<<48 | uint64(header[19])<<56,
-			Key:       []byte{},
-			Value:     []byte{},
+			Timestamp: uint64(header[12]) | uint64(header[13])<<8 | uint64(header[14])<<16 |
+				uint64(header[15])<<24 | uint64(header[16])<<32 | uint64(header[17])<<40 |
+				uint64(header[18])<<48 | uint64(header[19])<<56,
+			Key:   []byte{},
+			Value: []byte{},
 		}
 		return record, nil
 	}

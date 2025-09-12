@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ssargent/freyjadb/pkg/api"
 	"github.com/ssargent/freyjadb/pkg/store"
 )
 
@@ -67,18 +66,16 @@ Examples:
 			return
 		}
 
-		// Start API server
-		config := api.ServerConfig{
-			Port:                port,
-			APIKey:              apiKey,
-			SystemKey:           systemKey,
-			DataDir:             dataDir,
-			SystemDataDir:       dataDir, // Use same base directory for system data
-			SystemEncryptionKey: systemEncryptionKey,
-			EnableEncryption:    enableEncryption,
+		// Start API server using dependency injection
+		if container == nil {
+			cmd.Printf("Error: dependency container not initialized\n")
+			return
 		}
 
-		if err := api.StartServer(kv, config); err != nil {
+		serverFactory := container.GetServerFactory()
+		serverStarter := serverFactory.CreateServerStarter()
+
+		if err := serverStarter.StartServer(kv, port, apiKey, systemKey, dataDir, systemEncryptionKey, enableEncryption); err != nil {
 			cmd.Printf("Error starting server: %v\n", err)
 		}
 	},
@@ -98,14 +95,12 @@ func init() {
 
 // loadExistingSystemKey attempts to load the system API key from an existing initialized system
 func loadExistingSystemKey(dataDir string) (string, error) {
-	// Create system service config
-	systemConfig := api.SystemConfig{
-		DataDir:          dataDir,
-		EncryptionKey:    "dummy-key-for-loading", // Will be overridden when we load the actual key
-		EnableEncryption: false,                   // Disable encryption temporarily to load the key
+	if container == nil {
+		return "", fmt.Errorf("dependency container not initialized")
 	}
 
-	systemService, err := api.NewSystemService(systemConfig)
+	factory := container.GetSystemServiceFactory()
+	systemService, err := factory.CreateSystemService(dataDir, "dummy-key-for-loading", false)
 	if err != nil {
 		return "", fmt.Errorf("failed to create system service: %w", err)
 	}

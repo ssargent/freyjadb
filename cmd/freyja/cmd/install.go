@@ -120,13 +120,17 @@ func init() {
 	installCmd.Flags().String("system-key", "", "System API key for administrative operations (required)")
 	installCmd.Flags().Int("port", 8080, "Port for the API server")
 	installCmd.Flags().Bool("force", false, "Force reinstall even if errors occur")
-	installCmd.MarkFlagRequired("api-key")
-	installCmd.MarkFlagRequired("system-key")
+	if err := installCmd.MarkFlagRequired("api-key"); err != nil {
+		panic(err)
+	}
+	if err := installCmd.MarkFlagRequired("system-key"); err != nil {
+		panic(err)
+	}
 }
 
 // createDataDirectory creates the data directory with proper permissions
 func createDataDirectory(dataDir string) error {
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	if err := os.MkdirAll(dataDir, 0750); err != nil {
 		return fmt.Errorf("failed to create data directory %s: %w", dataDir, err)
 	}
 
@@ -196,7 +200,8 @@ Type=simple
 User=freyja
 Environment=DATA_DIR=%s
 Environment=SYSTEM_KEY=%s
-ExecStart=/usr/local/bin/freyja serve --data-dir=${DATA_DIR} --api-key=%s --system-key=${SYSTEM_KEY} --port=%d --enable-encryption
+ExecStart=/usr/local/bin/freyja serve --data-dir=${DATA_DIR} \
+--api-key=%s --system-key=${SYSTEM_KEY} --port=%d --enable-encryption
 Restart=always
 RestartSec=5
 

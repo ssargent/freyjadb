@@ -9,7 +9,6 @@ import (
 )
 
 func TestSystemService(t *testing.T) {
-
 	t.Run("NewSystemService", func(t *testing.T) {
 		tmpDir, err := os.MkdirTemp("", "freyja_system_test_new")
 		assert.NoError(t, err)

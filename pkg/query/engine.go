@@ -23,7 +23,8 @@ func NewSimpleQueryEngine(indexManager *index.IndexManager, kvStore *store.KVSto
 }
 
 // ExecuteQuery executes a single field query
-func (qe *SimpleQueryEngine) ExecuteQuery(ctx context.Context, partitionKey string, query FieldQuery, extractor FieldExtractor) (QueryIterator, error) {
+func (qe *SimpleQueryEngine) ExecuteQuery(ctx context.Context, partitionKey string,
+	query FieldQuery, extractor FieldExtractor) (QueryIterator, error) {
 	if err := query.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid query: %w", err)
 	}
@@ -44,7 +45,8 @@ func (qe *SimpleQueryEngine) ExecuteQuery(ctx context.Context, partitionKey stri
 }
 
 // ExecuteRangeQuery executes a range query between two field conditions
-func (qe *SimpleQueryEngine) ExecuteRangeQuery(ctx context.Context, partitionKey string, startQuery, endQuery FieldQuery, extractor FieldExtractor) (QueryIterator, error) {
+func (qe *SimpleQueryEngine) ExecuteRangeQuery(ctx context.Context, partitionKey string,
+	startQuery, endQuery FieldQuery, extractor FieldExtractor) (QueryIterator, error) {
 	if err := startQuery.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid start query: %w", err)
 	}
@@ -62,7 +64,8 @@ func (qe *SimpleQueryEngine) ExecuteRangeQuery(ctx context.Context, partitionKey
 }
 
 // executeEqualityQuery handles exact field value matches
-func (qe *SimpleQueryEngine) executeEqualityQuery(ctx context.Context, idx *index.SecondaryIndex, value interface{}, extractor FieldExtractor) (QueryIterator, error) {
+func (qe *SimpleQueryEngine) executeEqualityQuery(ctx context.Context, idx *index.SecondaryIndex,
+	value interface{}, extractor FieldExtractor) (QueryIterator, error) {
 	// Search the index for matching records
 	primaryKeys, err := idx.Search(value)
 	if err != nil {
@@ -96,7 +99,8 @@ func (qe *SimpleQueryEngine) executeEqualityQuery(ctx context.Context, idx *inde
 }
 
 // executeRangeQuery handles single-field range queries
-func (qe *SimpleQueryEngine) executeRangeQuery(ctx context.Context, idx *index.SecondaryIndex, query FieldQuery, extractor FieldExtractor) (QueryIterator, error) {
+func (qe *SimpleQueryEngine) executeRangeQuery(ctx context.Context, idx *index.SecondaryIndex,
+	query FieldQuery, extractor FieldExtractor) (QueryIterator, error) {
 	var startValue, endValue interface{}
 
 	switch query.Operator {
@@ -145,7 +149,8 @@ func (qe *SimpleQueryEngine) executeRangeQuery(ctx context.Context, idx *index.S
 }
 
 // executeRangeQueryBetween handles range queries between two values
-func (qe *SimpleQueryEngine) executeRangeQueryBetween(ctx context.Context, idx *index.SecondaryIndex, startQuery, endQuery FieldQuery, extractor FieldExtractor) (QueryIterator, error) {
+func (qe *SimpleQueryEngine) executeRangeQueryBetween(ctx context.Context, idx *index.SecondaryIndex,
+	startQuery, endQuery FieldQuery, extractor FieldExtractor) (QueryIterator, error) {
 	primaryKeys, err := idx.SearchRange(startQuery.Value, endQuery.Value)
 	if err != nil {
 		return nil, fmt.Errorf("range search failed: %w", err)

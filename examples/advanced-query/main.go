@@ -78,7 +78,9 @@ func main() {
 	// Create temporary directory for demo
 	tempDir := "/tmp/freyjadb_demo"
 	os.RemoveAll(tempDir) // Clean up previous runs
-	os.MkdirAll(tempDir, 0755)
+	if err := os.MkdirAll(tempDir, 0750); err != nil {
+		log.Fatalf("Failed to create temp dir: %v", err)
+	}
 
 	// Initialize KV Store
 	kvConfig := store.KVStoreConfig{
@@ -89,7 +91,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create KV store: %v", err)
 	}
-	defer kvStore.Close()
+	defer func() {
+		if err := kvStore.Close(); err != nil {
+			log.Printf("Warning: failed to close KV store: %v", err)
+		}
+	}()
 
 	// Open the store
 	_, err = kvStore.Open()
@@ -219,7 +225,9 @@ func main() {
 
 		fmt.Printf("   👤 %s (%s) - Age: %d\n", user.Name, user.Email, user.Age)
 	}
-	iterator.Close()
+	if err := iterator.Close(); err != nil {
+		log.Printf("Warning: failed to close iterator: %v", err)
+	}
 	fmt.Printf("   📊 Found %d users aged 25\n", count)
 
 	// Query 2: Find users aged 25 or older
@@ -241,10 +249,15 @@ func main() {
 		rangeCount++
 
 		var user User
-		json.Unmarshal(result.Value, &user)
+		if err := json.Unmarshal(result.Value, &user); err != nil {
+			log.Printf("Warning: failed to unmarshal user: %v", err)
+			continue
+		}
 		fmt.Printf("   👤 %s - Age: %d\n", user.Name, user.Age)
 	}
-	rangeIterator.Close()
+	if err := rangeIterator.Close(); err != nil {
+		log.Printf("Warning: failed to close range iterator: %v", err)
+	}
 	fmt.Printf("   📊 Found %d users aged 25+\n", rangeCount)
 
 	// Query 3: Find users in New York
@@ -266,10 +279,15 @@ func main() {
 		cityCount++
 
 		var user User
-		json.Unmarshal(result.Value, &user)
+		if err := json.Unmarshal(result.Value, &user); err != nil {
+			log.Printf("Warning: failed to unmarshal user: %v", err)
+			continue
+		}
 		fmt.Printf("   🏙️  %s (%s) - %s\n", user.Name, user.Email, user.City)
 	}
-	cityIterator.Close()
+	if err := cityIterator.Close(); err != nil {
+		log.Printf("Warning: failed to close city iterator: %v", err)
+	}
 	fmt.Printf("   📊 Found %d users in New York\n", cityCount)
 
 	// Query 4: Range query between ages
@@ -296,10 +314,15 @@ func main() {
 		betweenCount++
 
 		var user User
-		json.Unmarshal(result.Value, &user)
+		if err := json.Unmarshal(result.Value, &user); err != nil {
+			log.Printf("Warning: failed to unmarshal user: %v", err)
+			continue
+		}
 		fmt.Printf("   📅 %s - Age: %d\n", user.Name, user.Age)
 	}
-	betweenIterator.Close()
+	if err := betweenIterator.Close(); err != nil {
+		log.Printf("Warning: failed to close between iterator: %v", err)
+	}
 	fmt.Printf("   📊 Found %d users aged 25-35\n", betweenCount)
 
 	// 4. Demonstrate statistics
@@ -309,7 +332,9 @@ func main() {
 	fmt.Printf("   💾 Data size: %d bytes\n", stats.DataSize)
 
 	// Clean up
-	os.RemoveAll(tempDir)
+	if err := os.RemoveAll(tempDir); err != nil {
+		log.Printf("Warning: failed to clean up temp dir: %v", err)
+	}
 	fmt.Println("\n🧹 Demo completed and cleaned up!")
 
 	fmt.Println("\n🎉 FreyjaDB Advanced Query Demo Complete!")

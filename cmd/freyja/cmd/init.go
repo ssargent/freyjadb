@@ -8,10 +8,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/ssargent/freyjadb/pkg/api"
 )
 
 // initCmd represents the init command
@@ -61,7 +59,7 @@ Examples:
 		cmd.Printf("System key: %s\n", systemKey[:8]+"...")
 
 		// Create data directory
-		if err := os.MkdirAll(dataDir, 0755); err != nil {
+		if err := os.MkdirAll(dataDir, 0750); err != nil {
 			cmd.Printf("Error creating data directory: %v\n", err)
 			os.Exit(1)
 		}
@@ -76,8 +74,21 @@ Examples:
 			return
 		}
 
-		// Initialize system store
-		if err := initializeSystemStore(systemDataDir, systemKey, systemAPIKey); err != nil {
+		// Initialize system store using dependency injection
+		if container == nil {
+			cmd.Printf("Error: dependency container not initialized\n")
+			os.Exit(1)
+		}
+
+		factory := container.GetSystemServiceFactory()
+
+		systemService, err := factory.CreateSystemService(systemDataDir, systemKey, true)
+		if err != nil {
+			cmd.Printf("Error creating system service: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := systemService.InitializeSystem(systemDataDir, systemKey, systemAPIKey); err != nil {
 			cmd.Printf("Error initializing system store: %v\n", err)
 			os.Exit(1)
 		}
@@ -94,10 +105,13 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 
 	initCmd.Flags().String("system-key", "", "System encryption key for data protection (required)")
-	initCmd.Flags().String("system-api-key", "", "System API key for administrative operations (optional, will be generated if not provided)")
+	initCmd.Flags().String("system-api-key", "",
+		"System API key for administrative operations (optional, will be generated if not provided)")
 	initCmd.Flags().String("data-dir", "./data", "Data directory for freyja")
 	initCmd.Flags().Bool("force", false, "Force reinitialization even if system already exists")
-	initCmd.MarkFlagRequired("system-key")
+	if err := initCmd.MarkFlagRequired("system-key"); err != nil {
+		panic(err)
+	}
 }
 
 // generateSystemAPIKey generates a secure random API key
@@ -107,61 +121,4 @@ func generateSystemAPIKey() (string, error) {
 		return "", fmt.Errorf("failed to generate random API key: %w", err)
 	}
 	return hex.EncodeToString(bytes), nil
-}
-
-// initializeSystemStore sets up the system key-value store and stores the system API key
-func initializeSystemStore(dataDir, systemKey, systemAPIKey string) error {
-	// Create system service
-	encryptionKey := systemKey
-	if len(encryptionKey) < 32 {
-		// Pad with zeros if key is too short
-		padding := make([]byte, 32-len(encryptionKey))
-		encryptionKey = encryptionKey + string(padding)
-	} else if len(encryptionKey) > 32 {
-		// Truncate if key is too long
-		encryptionKey = encryptionKey[:32]
-	}
-
-	systemConfig := api.SystemConfig{
-		DataDir:          dataDir,
-		EncryptionKey:    encryptionKey,
-		EnableEncryption: true,
-	}
-
-	systemService, err := api.NewSystemService(systemConfig)
-	if err != nil {
-		return fmt.Errorf("failed to create system service: %w", err)
-	}
-
-	// Open system service
-	if err := systemService.Open(); err != nil {
-		return fmt.Errorf("failed to open system service: %w", err)
-	}
-	defer systemService.Close()
-
-	// Store system API key
-	apiKey := api.APIKey{
-		ID:          "system-root",
-		Key:         systemAPIKey,
-		Description: "System root API key for administrative operations",
-		CreatedAt:   time.Now(),
-		IsActive:    true,
-	}
-
-	if err := systemService.StoreAPIKey(apiKey); err != nil {
-		return fmt.Errorf("failed to store system API key: %w", err)
-	}
-
-	// Store some default system configuration
-	defaultConfig := map[string]interface{}{
-		"initialized_at":     time.Now().Format(time.RFC3339),
-		"version":            "1.0.0",
-		"encryption_enabled": true,
-	}
-
-	if err := systemService.StoreSystemConfig("system-info", defaultConfig); err != nil {
-		return fmt.Errorf("failed to store system configuration: %w", err)
-	}
-
-	return nil
 }

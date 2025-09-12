@@ -8,10 +8,14 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ssargent/freyjadb/pkg/di"
 	"github.com/ssargent/freyjadb/pkg/store"
 
 	"github.com/spf13/cobra"
 )
+
+// Global container for dependency injection
+var container *di.Container
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -21,7 +25,7 @@ var rootCmd = &cobra.Command{
 optional partitioning and sort keys.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		dataDir, _ := cmd.Flags().GetString("data-dir")
-		if err := os.MkdirAll(dataDir, 0755); err != nil {
+		if err := os.MkdirAll(dataDir, 0750); err != nil {
 			return fmt.Errorf("failed to create data dir: %w", err)
 		}
 		kvStore, err := store.NewKVStore(store.KVStoreConfig{DataDir: dataDir})
@@ -53,4 +57,9 @@ func Execute() {
 func init() {
 	// Global data directory flag
 	rootCmd.PersistentFlags().StringP("data-dir", "d", "./data", "Data directory for the store")
+}
+
+// SetContainer sets the dependency injection container for the cmd package
+func SetContainer(c *di.Container) {
+	container = c
 }

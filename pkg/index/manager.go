@@ -150,7 +150,7 @@ func (idx *SecondaryIndex) serializeValue(buf *bytes.Buffer, value interface{}) 
 	default:
 		// For unknown types, convert to string
 		buf.WriteByte(2)
-		buf.WriteString(fmt.Sprintf("%v", v))
+		fmt.Fprintf(buf, "%v", v)
 		buf.WriteByte(0)
 	}
 }
@@ -269,14 +269,6 @@ func (idx *SecondaryIndex) incrementPrefix(prefix []byte) []byte {
 	next[len(next)-1]++
 
 	return next
-}
-
-// extractPrimaryKey extracts the primary key from a composite index key
-func (idx *SecondaryIndex) extractPrimaryKey(compositeKey, fieldPrefix []byte) []byte {
-	if !bytes.HasPrefix(compositeKey, fieldPrefix) {
-		return nil
-	}
-	return compositeKey[len(fieldPrefix):]
 }
 
 // createKSUIDFromBytes creates a deterministic KSUID from arbitrary bytes

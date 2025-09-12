@@ -24,12 +24,12 @@ type LogWriter struct {
 // NewLogWriter creates a new log writer with the given configuration
 func NewLogWriter(config LogWriterConfig) (*LogWriter, error) {
 	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(config.FilePath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(config.FilePath), 0750); err != nil {
 		return nil, err
 	}
 
 	// Open file in write-only mode, create if doesn't exist
-	file, err := os.OpenFile(config.FilePath, os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(config.FilePath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return nil, err
 	}

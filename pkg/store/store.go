@@ -108,10 +108,14 @@ func NewStore(dataDir string) (Store, error) {
 
 	// Create dummy segments
 	if _, err := os.Stat(filepath.Join(dataDir, "001.data")); os.IsNotExist(err) {
-		if err := os.MkdirAll(dataDir, 0755); err != nil {
+		if err := os.MkdirAll(dataDir, 0750); err != nil {
 			return nil, err
 		}
 		for _, seg := range []string{"001.data", "002.data"} {
+			// Validate segment name to prevent path traversal
+			if seg != "001.data" && seg != "002.data" {
+				return nil, fmt.Errorf("invalid segment name: %s", seg)
+			}
 			f, err := os.Create(filepath.Join(dataDir, seg))
 			if err != nil {
 				return nil, err
@@ -149,8 +153,10 @@ func (s *StoreImpl) Explain(ctx context.Context, opts ExplainOptions) (*ExplainR
 	}
 
 	res.Partitions = map[string]PKStats{
-		"User": {Keys: 800, SKRanges: []SKRange{{Name: "Location", Count: 500, Min: "loc:1", Max: "loc:750"}}, Cardinality: "1:N"},
-		"Item": {Keys: 450, SKRanges: []SKRange{{Name: "Category", Count: 250, Min: "cat:1", Max: "cat:300"}}, Cardinality: "N:1"},
+		"User": {Keys: 800, SKRanges: []SKRange{{Name: "Location", Count: 500,
+			Min: "loc:1", Max: "loc:750"}}, Cardinality: "1:N"},
+		"Item": {Keys: 450, SKRanges: []SKRange{{Name: "Category", Count: 250,
+			Min: "cat:1", Max: "cat:300"}}, Cardinality: "N:1"},
 	}
 
 	if opts.WithSamples > 0 {

@@ -1,0 +1,37 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - unused
+    - goconst
+    - gocyclo
+    - ineffassign
+    - misspell
+    - unconvert
+    - unparam
+    - errcheck
+    - gocritic
+    - gosec
+    - bodyclose
+    - exhaustive
+    - gochecknoinits
+    - goprintffuncname
+    - lll
+    - nakedret
+    - noctx
+    - nolintlint
+    - rowserrcheck
+    - whitespace
+    - depguard
+    - dogsled
+    - dupl
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

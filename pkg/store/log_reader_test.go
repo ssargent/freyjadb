@@ -17,7 +17,7 @@ func TestNewLogReader(t *testing.T) {
 	filePath := filepath.Join(tmpDir, "test.log")
 
 	// Create a test file
-	err = os.WriteFile(filePath, []byte("test data"), 0644)
+	err = os.WriteFile(filePath, []byte("test data"), 0600)
 	require.NoError(t, err)
 
 	config := LogReaderConfig{
@@ -51,7 +51,7 @@ func TestNewLogReader_WithStartOffset(t *testing.T) {
 
 	// Create a test file with some data
 	testData := []byte("0123456789abcdef")
-	err = os.WriteFile(filePath, testData, 0644)
+	err = os.WriteFile(filePath, testData, 0600)
 	require.NoError(t, err)
 
 	config := LogReaderConfig{
@@ -76,7 +76,7 @@ func TestLogReader_ReadNext_EOF(t *testing.T) {
 	filePath := filepath.Join(tmpDir, "empty.log")
 
 	// Create an empty file
-	err = os.WriteFile(filePath, []byte{}, 0644)
+	err = os.WriteFile(filePath, []byte{}, 0600)
 	require.NoError(t, err)
 
 	config := LogReaderConfig{
@@ -102,7 +102,7 @@ func TestLogReader_Seek(t *testing.T) {
 
 	// Create a test file
 	testData := []byte("0123456789abcdef")
-	err = os.WriteFile(filePath, testData, 0644)
+	err = os.WriteFile(filePath, testData, 0600)
 	require.NoError(t, err)
 
 	config := LogReaderConfig{
@@ -130,7 +130,7 @@ func TestLogReader_Iterator(t *testing.T) {
 	filePath := filepath.Join(tmpDir, "test.log")
 
 	// Create an empty file for this test
-	err = os.WriteFile(filePath, []byte{}, 0644)
+	err = os.WriteFile(filePath, []byte{}, 0600)
 	require.NoError(t, err)
 
 	config := LogReaderConfig{
@@ -160,7 +160,7 @@ func TestLogReader_ReadAt(t *testing.T) {
 
 	// Create a test file
 	testData := []byte("0123456789abcdef")
-	err = os.WriteFile(filePath, testData, 0644)
+	err = os.WriteFile(filePath, testData, 0600)
 	require.NoError(t, err)
 
 	config := LogReaderConfig{
@@ -190,7 +190,7 @@ func TestLogReader_MultipleOperations(t *testing.T) {
 
 	// Create a test file
 	testData := []byte("0123456789abcdef")
-	err = os.WriteFile(filePath, testData, 0644)
+	err = os.WriteFile(filePath, testData, 0600)
 	require.NoError(t, err)
 
 	config := LogReaderConfig{
@@ -238,7 +238,7 @@ func BenchmarkLogReader_Seek(b *testing.B) {
 	for i := range testData {
 		testData[i] = byte(i % 256)
 	}
-	err = os.WriteFile(filePath, testData, 0644)
+	err = os.WriteFile(filePath, testData, 0600)
 	require.NoError(b, err)
 
 	config := LogReaderConfig{
@@ -268,7 +268,7 @@ func BenchmarkLogReader_ReadAt(b *testing.B) {
 	for i := range testData {
 		testData[i] = byte(i % 256)
 	}
-	err = os.WriteFile(filePath, testData, 0644)
+	err = os.WriteFile(filePath, testData, 0600)
 	require.NoError(b, err)
 
 	config := LogReaderConfig{

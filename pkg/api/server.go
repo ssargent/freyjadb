@@ -104,7 +104,8 @@ func StartServer(store IKVStore, config ServerConfig) error {
 
 		// Relationships
 		r.Post("/relationships", metrics.InstrumentHandler("POST", "/api/v1/relationships", server.handleCreateRelationship))
-		r.Delete("/relationships", metrics.InstrumentHandler("DELETE", "/api/v1/relationships", server.handleDeleteRelationship))
+		r.Delete("/relationships", metrics.InstrumentHandler("DELETE",
+			"/api/v1/relationships", server.handleDeleteRelationship))
 		r.Get("/relationships", metrics.InstrumentHandler("GET", "/api/v1/relationships", server.handleGetRelationships))
 
 		// Diagnostics
@@ -119,7 +120,8 @@ func StartServer(store IKVStore, config ServerConfig) error {
 			r.Post("/api-keys", metrics.InstrumentHandler("POST", "/api/v1/system/api-keys", server.handleCreateAPIKey))
 			r.Get("/api-keys", metrics.InstrumentHandler("GET", "/api/v1/system/api-keys", server.handleListAPIKeys))
 			r.Get("/api-keys/{id}", metrics.InstrumentHandler("GET", "/api/v1/system/api-keys/{id}", server.handleGetAPIKey))
-			r.Delete("/api-keys/{id}", metrics.InstrumentHandler("DELETE", "/api/v1/system/api-keys/{id}", server.handleDeleteAPIKey))
+			r.Delete("/api-keys/{id}", metrics.InstrumentHandler("DELETE",
+				"/api/v1/system/api-keys/{id}", server.handleDeleteAPIKey))
 
 			// System configuration
 			r.Get("/config/{key}", metrics.InstrumentHandler("GET", "/api/v1/system/config/{key}", server.handleGetSystemConfig))
@@ -196,7 +198,17 @@ func StartServer(store IKVStore, config ServerConfig) error {
 	addr := fmt.Sprintf(":%d", config.Port)
 	fmt.Printf("Starting FreyjaDB REST API server on %s\n", addr)
 	fmt.Printf("Metrics available at: http://localhost:%d/metrics\n", config.Port)
-	log.Fatal(http.ListenAndServe(addr, r))
+
+	// Create HTTP server with timeouts
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      r,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	log.Fatal(srv.ListenAndServe())
 
 	return nil
 }

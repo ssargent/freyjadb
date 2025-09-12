@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -397,7 +398,6 @@ func (tree *BPlusTree) splitLeaf(leaf *node) {
 func insertKeyInParent(tree *BPlusTree,
 	parent *node, key []byte,
 	leftChild, rightChild *node) {
-
 	idx := 0
 	for idx < len(parent.keys) && bytes.Compare(parent.keys[idx], key) < 0 {
 		idx++
@@ -470,6 +470,8 @@ func (tree *BPlusTree) Save(filename string) error {
 	tree.m.Lock()
 	defer tree.m.Unlock()
 
+	// Clean the filename to prevent path traversal
+	filename = filepath.Clean(filename)
 	file, err := os.Create(filename)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
@@ -629,6 +631,8 @@ func (tree *BPlusTree) writeNode(file *os.File, n *node, nodeMap map[*node]uint3
 // Load deserializes a B+Tree from a binary file.
 // Returns a new BPlusTree instance loaded from the file.
 func LoadBPlusTree(filename string) (*BPlusTree, error) {
+	// Clean the filename to prevent path traversal
+	filename = filepath.Clean(filename)
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
