@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
@@ -81,16 +80,4 @@ Examples:
 	rootCmd.AddCommand(placeCmd)
 	rootCmd.AddCommand(groupCmd)
 	rootCmd.AddCommand(relationshipCmd)
-}
-
-// getProjectDir returns the absolute path to the project directory
-func getProjectDir() string {
-	if filepath.IsAbs(config.ProjectDir) {
-		return config.ProjectDir
-	}
-	abs, err := filepath.Abs(config.ProjectDir)
-	if err != nil {
-		return config.ProjectDir
-	}
-	return abs
 }

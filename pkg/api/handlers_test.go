@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/ssargent/freyjadb/pkg/store"
@@ -118,38 +117,6 @@ func TestJSONValidation(t *testing.T) {
 	})
 }
 
-// mockKVStore wraps KVStore to allow mocking Put method
-type mockKVStore struct {
-	*store.KVStore
-	putFunc func(key, value []byte) error
-}
-
-func (m *mockKVStore) Put(key, value []byte) error {
-	if m.putFunc != nil {
-		return m.putFunc(key, value)
-	}
-	return m.KVStore.Put(key, value)
-}
-
-// mockMetrics embeds Metrics but overrides methods to be no-ops for testing
-type mockMetrics struct {
-	*Metrics
-}
-
-func (m *mockMetrics) RecordHTTPRequest(method, endpoint string, statusCode int, duration time.Duration) {
-}
-func (m *mockMetrics) RecordDBOperation(operation string, success bool, duration time.Duration) {}
-func (m *mockMetrics) UpdateDBStats(keys int, dataSize int64)                                   {}
-func (m *mockMetrics) RecordAuthRequest(success bool)                                           {}
-func (m *mockMetrics) RecordRelationshipOperation(operation string, success bool)               {}
-func (m *mockMetrics) RecordHealthCheck(success bool)                                           {}
-func (m *mockMetrics) InstrumentHandler(method, endpoint string, handler http.HandlerFunc) http.HandlerFunc {
-	return handler
-}
-func (m *mockMetrics) InstrumentAuthMiddleware(next func(http.Handler) http.Handler) func(http.Handler) http.Handler {
-	return next
-}
-
 func helperEncodeJsonWithContentType(t *testing.T, data string) []byte {
 	var mything interface{}
 	err := json.Unmarshal([]byte(data), &mything)
@@ -163,7 +130,9 @@ func helperEncodeJsonWithContentType(t *testing.T, data string) []byte {
 
 // TestHandlePut tests the handlePut function with various scenarios
 // Note on macos this test may warn about a very odd linker error:
-// ld: warning: '/private/var/folders/mn/5l10pmk93_l4j6hv6k4cgd280000gn/T/go-link-2562642374/000013.o' has malformed LC_DYSYMTAB, expected 98 undefined symbols to start at index 1626, found 95 undefined symbols starting at index 1626
+// ld: warning: '/private/var/folders/mn/5l10pmk93_l4j6hv6k4cgd280000gn/T/go-link-2562642374/000013.o'
+// has malformed LC_DYSYMTAB, expected 98 undefined symbols to start at index 1626,
+// found 95 undefined symbols starting at index 1626
 
 func TestHandlePut(t *testing.T) {
 	tests := []struct {

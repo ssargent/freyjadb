@@ -74,6 +74,8 @@ type QueryIterator interface {
 
 // QueryEngine handles query execution
 type QueryEngine interface {
-	ExecuteQuery(ctx context.Context, partitionKey string, query FieldQuery, extractor FieldExtractor) (QueryIterator, error)
-	ExecuteRangeQuery(ctx context.Context, partitionKey string, startQuery, endQuery FieldQuery, extractor FieldExtractor) (QueryIterator, error)
+	ExecuteQuery(ctx context.Context, partitionKey string, query FieldQuery,
+		extractor FieldExtractor) (QueryIterator, error)
+	ExecuteRangeQuery(ctx context.Context, partitionKey string, startQuery, endQuery FieldQuery,
+		extractor FieldExtractor) (QueryIterator, error)
 }

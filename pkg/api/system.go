@@ -44,7 +44,7 @@ type APIKey struct {
 func NewSystemService(config SystemConfig) (*SystemService, error) {
 	// Ensure system data directory exists
 	systemDataDir := filepath.Join(config.DataDir, "system")
-	if err := os.MkdirAll(systemDataDir, 0755); err != nil {
+	if err := os.MkdirAll(systemDataDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create system data directory: %w", err)
 	}
 
@@ -110,7 +110,8 @@ func (s *SystemService) Close() error {
 	if s.store != nil {
 		if err := s.store.Close(); err != nil {
 			// Don't return error for "file already closed" as it's not a real error
-			if err.Error() != "close /var/folders/mn/5l10pmk93_l4j6hv6k4cgd280000gn/T/freyja_system_integration1021559736/system/active.data: file already closed" &&
+			if err.Error() != "close /var/folders/mn/5l10pmk93_l4j6hv6k4cgd280000gn/T/"+
+				"freyja_system_integration1021559736/system/active.data: file already closed" &&
 				!strings.Contains(err.Error(), "file already closed") {
 				return fmt.Errorf("failed to close system store: %w", err)
 			}
@@ -310,4 +311,39 @@ func (s *SystemService) GetSystemConfig(key string, value interface{}) error {
 // IsOpen returns whether the system service is open
 func (s *SystemService) IsOpen() bool {
 	return s.isOpen
+}
+
+// InitializeSystem implements the SystemInitializer interface
+func (s *SystemService) InitializeSystem(dataDir, systemKey, systemAPIKey string) error {
+	// Open the system service
+	if err := s.Open(); err != nil {
+		return fmt.Errorf("failed to open system service: %w", err)
+	}
+	defer s.Close()
+
+	// Store system API key
+	apiKey := APIKey{
+		ID:          "system-root",
+		Key:         systemAPIKey,
+		Description: "System root API key for administrative operations",
+		CreatedAt:   time.Now(),
+		IsActive:    true,
+	}
+
+	if err := s.StoreAPIKey(apiKey); err != nil {
+		return fmt.Errorf("failed to store system API key: %w", err)
+	}
+
+	// Store some default system configuration
+	defaultConfig := map[string]interface{}{
+		"initialized_at":     time.Now().Format(time.RFC3339),
+		"version":            "1.0.0",
+		"encryption_enabled": s.config.EnableEncryption,
+	}
+
+	if err := s.StoreSystemConfig("system-info", defaultConfig); err != nil {
+		return fmt.Errorf("failed to store system configuration: %w", err)
+	}
+
+	return nil
 }

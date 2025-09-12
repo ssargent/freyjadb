@@ -28,7 +28,7 @@ type KVStore struct {
 // NewKVStore creates a new key-value store instance
 func NewKVStore(config KVStoreConfig) (*KVStore, error) {
 	// Ensure data directory exists
-	if err := os.MkdirAll(config.DataDir, 0755); err != nil {
+	if err := os.MkdirAll(config.DataDir, 0750); err != nil {
 		return nil, err
 	}
 
@@ -334,12 +334,13 @@ func (kv *KVStore) validateLogFile(filePath string) (*RecoveryResult, error) {
 	}
 
 	// If corruption was found, truncate the file
-	var fileSizeAfter int64 = fileSizeBefore
+	var fileSizeAfter = fileSizeBefore
 	var recordsTruncated int64
 
 	if corruptionFound && lastValidOffset >= 0 {
 		// Truncate the file to the last valid record
-		file, err := os.OpenFile(filePath, os.O_RDWR, 0644)
+		filePath = filepath.Clean(filePath)
+		file, err := os.OpenFile(filePath, os.O_RDWR, 0600)
 		if err != nil {
 			return nil, err
 		}

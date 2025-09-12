@@ -66,24 +66,6 @@ func makeKey(entityType EntityType, id string) []byte {
 	return []byte(fmt.Sprintf("%s:%s", entityType, id))
 }
 
-// parseKey extracts entity type and ID from a storage key
-func parseKey(key []byte) (EntityType, string, error) {
-	parts := strings.SplitN(string(key), ":", 2)
-	if len(parts) != 2 {
-		return "", "", fmt.Errorf("invalid key format: %s", key)
-	}
-
-	entityType := EntityType(parts[0])
-	id := parts[1]
-
-	switch entityType {
-	case EntityTypeCharacter, EntityTypePlace, EntityTypeGroup:
-		return entityType, id, nil
-	default:
-		return "", "", fmt.Errorf("unknown entity type: %s", entityType)
-	}
-}
-
 // generateID creates a slug-like ID from a name
 func generateID(name string) string {
 	// Convert to lowercase
@@ -216,7 +198,8 @@ func (ls *LoreStore) EntityExists(entityType EntityType, id string) bool {
 }
 
 // PutRelationship creates a relationship between two Lore entities
-func (ls *LoreStore) PutRelationship(fromType EntityType, fromID string, toType EntityType, toID string, relation string) error {
+func (ls *LoreStore) PutRelationship(fromType EntityType, fromID string,
+	toType EntityType, toID string, relation string) error {
 	if !ls.isOpen {
 		return fmt.Errorf("store is not open")
 	}
@@ -228,7 +211,8 @@ func (ls *LoreStore) PutRelationship(fromType EntityType, fromID string, toType 
 }
 
 // DeleteRelationship removes a relationship between two Lore entities
-func (ls *LoreStore) DeleteRelationship(fromType EntityType, fromID string, toType EntityType, toID string, relation string) error {
+func (ls *LoreStore) DeleteRelationship(fromType EntityType, fromID string,
+	toType EntityType, toID string, relation string) error {
 	if !ls.isOpen {
 		return fmt.Errorf("store is not open")
 	}
@@ -240,7 +224,8 @@ func (ls *LoreStore) DeleteRelationship(fromType EntityType, fromID string, toTy
 }
 
 // GetEntityRelationships returns all relationships for a given entity
-func (ls *LoreStore) GetEntityRelationships(entityType EntityType, id string, direction string, relation string) ([]store.RelationshipResult, error) {
+func (ls *LoreStore) GetEntityRelationships(entityType EntityType, id string,
+	direction string, relation string) ([]store.RelationshipResult, error) {
 	if !ls.isOpen {
 		return nil, fmt.Errorf("store is not open")
 	}

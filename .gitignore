@@ -68,7 +68,7 @@ tags
 
 # FreyjaDB specific
 bin/
-freyja
+/freyja
 /lore
 dist/
 .lore/

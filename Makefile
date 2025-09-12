@@ -117,12 +117,12 @@ bench-mem:
 # Lint the code
 lint: check-tools
 	@echo "$(BLUE)Running linter...$(NC)"
-	$(GOLINT) run --no-config
+	$(GOLINT) run
 
 # Lint and fix automatically fixable issues
 lint-fix: check-tools
 	@echo "$(BLUE)Running linter with auto-fix...$(NC)"
-	$(GOLINT) run --no-config --fix
+	$(GOLINT) run --fix
 
 # Format code
 format:

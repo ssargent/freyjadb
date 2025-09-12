@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -397,7 +398,6 @@ func (tree *BPlusTree) splitLeaf(leaf *node) {
 func insertKeyInParent(tree *BPlusTree,
 	parent *node, key []byte,
 	leftChild, rightChild *node) {
-
 	idx := 0
 	for idx < len(parent.keys) && bytes.Compare(parent.keys[idx], key) < 0 {
 		idx++
@@ -407,7 +407,7 @@ func insertKeyInParent(tree *BPlusTree,
 	copy(parent.keys[idx+1:], parent.keys[idx:])
 	parent.keys[idx] = key
 
-	parent.children = append(parent.children, rightChild)
+	parent.children = append(parent.children, nil)
 	copy(parent.children[idx+2:], parent.children[idx+1:])
 	parent.children[idx+1] = rightChild
 
@@ -422,10 +422,6 @@ func insertKeyInParent(tree *BPlusTree,
 // splitInternalNode handles splitting an internal node that has overflowed.
 // Must be called with 'internal' locked in exclusive mode.
 func splitInternalNode(tree *BPlusTree, internal *node) {
-	if internal.parent == nil {
-		internal.mutex.Lock()
-		defer internal.mutex.Unlock()
-	}
 	mid := len(internal.keys) / 2
 	splitKey := internal.keys[mid]
 
@@ -469,11 +465,13 @@ func splitInternalNode(tree *BPlusTree, internal *node) {
 
 // Save serializes the B+Tree to a binary file.
 // This method is thread-safe and can be called concurrently with other operations.
-// It acquires a read lock on the tree to ensure consistency during serialization.
+// It acquires an exclusive lock on the tree to ensure consistency during serialization.
 func (tree *BPlusTree) Save(filename string) error {
-	tree.m.RLock()
-	defer tree.m.RUnlock()
+	tree.m.Lock()
+	defer tree.m.Unlock()
 
+	// Clean the filename to prevent path traversal
+	filename = filepath.Clean(filename)
 	file, err := os.Create(filename)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
@@ -633,6 +631,8 @@ func (tree *BPlusTree) writeNode(file *os.File, n *node, nodeMap map[*node]uint3
 // Load deserializes a B+Tree from a binary file.
 // Returns a new BPlusTree instance loaded from the file.
 func LoadBPlusTree(filename string) (*BPlusTree, error) {
+	// Clean the filename to prevent path traversal
+	filename = filepath.Clean(filename)
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
