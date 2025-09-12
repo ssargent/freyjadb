@@ -1,31 +1,220 @@
 # FreyjaDB
 
-A **small, embeddable, log-structured key-value database** inspired by DynamoDB and built with ❤️ in Go.
+A **small, embeddable key-value database** built with ❤️ in Go. FreyjaDB provides a simple, fast, and reliable way to store and retrieve data with an HTTP REST API.
 
-FreyjaDB is designed to be a high-performance, crash-safe storage engine that supports:
+## ✨ What FreyjaDB Offers
 
-- **SSD-friendly speed** with append-only writes and single random reads per GET
-- **Crash safety** with CRC-guarded records and automatic recovery
-- **High concurrency** with many readers and single writer architecture
-- **Optional DynamoDB-like semantics** with Partition Key / Sort Key support
-- **Educational codebase** with comprehensive tests and incremental development
+- **🔑 Key-Value API**: Simple HTTP REST API for storing and retrieving data
+- **🔐 System Store**: Secure, encrypted storage for API keys and system configuration
+- **🌳 B+ Tree Package**: High-performance, thread-safe B+ tree implementation for advanced use cases
+- **🛡️ Crash Safety**: Automatic recovery with data integrity checks
+- **⚡ High Performance**: Optimized for SSDs with fast lookups and writes
 
-## 🎯 Project Goals
+## 🚀 Quick Start
 
-FreyjaDB implements a **Bitcask-style storage engine** with the following characteristics:
+### 1. Initialize the System Store
 
-- **Point lookups** with excellent performance on SSDs
-- **Append-only log structure** for write optimization
-- **Crash recovery** with automatic tail truncation and index rebuilding
-- **Concurrent access** using lock-light reader/writer patterns
-- **Space efficiency** through background compaction and merge operations
-- **DynamoDB-inspired API** with partition and sort key semantics
+```bash
+# Initialize with encryption (recommended)
+freyja init --system-key="your-secure-system-key-here" --data-dir="./data"
+```
 
-## 🚀 Current Status
+### 2. Start the Server
 
-This project is under active development following a structured roadmap of 21 incremental milestones. Each component is built with comprehensive unit tests and integration tests.
+```bash
+# Start with system store support
+freyja serve \
+  --api-key="your-user-api-key" \
+  --system-key="your-secure-system-key-here" \
+  --data-dir="./data" \
+  --enable-encryption \
+  --port=8080
+```
 
-### Development Workflow
+### 3. Use the API
+
+```bash
+# Store data
+curl -X PUT http://localhost:8080/api/v1/kv/mykey \
+  -H "X-API-Key: your-user-api-key" \
+  -d "Hello, FreyjaDB!"
+
+# Retrieve data
+curl -X GET http://localhost:8080/api/v1/kv/mykey \
+  -H "X-API-Key: your-user-api-key"
+```
+
+## 🔌 Usage Options
+
+FreyjaDB can be used in two ways:
+
+### Option 1: HTTP REST API (Recommended for most use cases)
+
+Start the server and use HTTP endpoints for data operations.
+
+### Option 2: Embedded Database (Direct Integration into Go Applications)
+
+For scenarios where you want to embed the key-value store directly into your Go application—bypassing the HTTP server and API key authentication entirely—FreyjaDB provides a lightweight, high-performance embedded mode. This approach is ideal for:
+
+- **Single-process applications**: No network overhead or serialization costs.
+- **High-throughput needs**: Direct in-memory and disk access for faster operations.
+- **Simplified security**: No API keys required; access is controlled at the application level (e.g., via your app's authentication).
+- **Offline or edge computing**: Works without external dependencies on a server process.
+- **Custom integrations**: Full control over the store's lifecycle within your application's context.
+
+In embedded mode, you import the `pkg/store` package and manage the KVStore instance directly in your code. The store handles its own persistence to a data directory, with automatic crash recovery and indexing.
+
+#### Basic Embedded Usage
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+
+    "github.com/ssargent/freyjadb/pkg/store"
+)
+
+func main() {
+    // Configure the KV store (optional: add encryption via SystemKey if needed)
+    config := store.KVStoreConfig{
+        DataDir:    "./my_data",  // Directory for log files and indexes
+        // SystemKey: "your-secure-key",  // Optional: Enable encryption
+    }
+
+    // Create and open the store
+    kvStore, err := store.NewKVStore(config)
+    if err != nil {
+        log.Fatal("Failed to create store:", err)
+    }
+    defer kvStore.Close()
+
+    _, err = kvStore.Open()  // Loads existing data or initializes new
+    if err != nil {
+        log.Fatal("Failed to open store:", err)
+    }
+
+    // Basic operations: Put, Get, Delete
+    key := []byte("user:123")
+    value := []byte(`{"name": "John", "email": "john@example.com"}`)
+
+    if err := kvStore.Put(key, value); err != nil {
+        log.Fatal("Failed to store data:", err)
+    }
+
+    retrieved, err := kvStore.Get(key)
+    if err != nil {
+        log.Fatal("Failed to retrieve data:", err)
+    }
+    fmt.Printf("Retrieved: %s\n", string(retrieved))
+
+    if err := kvStore.Delete(key); err != nil {
+        log.Fatal("Failed to delete:", err)
+    }
+
+    // Prefix-based key listing
+    keys, err := kvStore.ListKeys([]byte("user:"))
+    if err != nil {
+        log.Fatal("Failed to list keys:", err)
+    }
+    fmt.Printf("Found %d user keys\n", len(keys))
+}
+```
+
+#### Advanced Embedded Configuration
+
+- **Encryption**: Set `SystemKey` in `KVStoreConfig` to enable transparent encryption for data at rest. This uses the same secure key management as the server mode but without API keys.
+  
+  ```go
+  config := store.KVStoreConfig{
+      DataDir:   "./encrypted_data",
+      SystemKey: "your-secure-system-key-here",  // Enables encryption
+  }
+  ```
+
+- **Concurrency**: The store supports multiple readers and a single writer out-of-the-box. For write-heavy workloads, consider serializing writes via a mutex in your application.
+
+- **Lifecycle Management**: Always call `Open()` after creation to load data, and `Close()` to flush changes and release resources. The store is not automatically persisted on every operation—changes are logged and flushed periodically.
+
+- **Error Handling**: Embedded mode provides direct error returns (e.g., `store.ErrKeyNotFound`). Wrap operations in your app's error handling as needed.
+
+#### When to Use Embedded vs. API Mode
+
+- **Embedded**: Best for internal app storage, microservices with direct integration, or when minimizing latency is critical. No setup for servers or API keys.
+- **API Mode**: Suited for multi-client access, microservices communication, or when you need HTTP-based interfaces with authentication via API keys.
+
+For more examples, see the [examples/](examples/) directory or the [System Store User Guide](docs/system-store-user-guide.md) for integration tips.
+## � Documentation
+
+- **[System Store User Guide](docs/system-store-user-guide.md)**: Complete guide for setup, API key management, and authentication
+- **[System Store Architecture](docs/system_kv_store_architecture.md)**: Technical details about the system store implementation
+- **[Development Guide](docs/DEVELOPMENT.md)**: Contributing guidelines and development practices
+
+## 🏗️ Architecture
+
+FreyjaDB consists of two main components:
+
+### Key-Value Store
+- **Log-structured storage** with in-memory hash index
+- **HTTP REST API** with JSON responses
+- **Crash recovery** with automatic data validation
+- **Concurrent access** (multiple readers, single writer)
+
+### System Store
+- **Encrypted storage** for sensitive system data
+- **API key management** with secure authentication
+- **System configuration** storage
+- **Complete separation** from user data for security
+
+## 🌳 B+ Tree Package
+
+FreyjaDB includes a standalone B+ tree implementation that can be used independently:
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/ssargent/freyjadb/pkg/bptree"
+)
+
+func main() {
+    // Create a new B+ tree
+    tree := bptree.NewBPlusTree(4)
+
+    // Insert key-value pairs
+    tree.Insert([]byte("key1"), []byte("value1"))
+    tree.Insert([]byte("key2"), []byte("value2"))
+
+    // Search for values
+    if value, found := tree.Search([]byte("key1")); found {
+        fmt.Printf("Found: %s\n", string(value))
+    }
+
+    // Persistence support
+    tree.Save("./my_tree.dat")
+    loadedTree, _ := bptree.LoadBPlusTree("./my_tree.dat")
+}
+```
+
+## ⚠️ Important Notes
+
+**FreyjaDB is a passion project** and is not currently designed or optimized for production workloads. It serves as:
+
+- A learning platform for database internals
+- A foundation for understanding distributed systems concepts
+- A codebase for experimenting with storage engine designs
+
+For production use cases, consider established databases like Redis, PostgreSQL, or DynamoDB.
+
+## 🛠️ Development
+
+### Prerequisites
+- Go 1.21+
+- Make
+
+### Building and Testing
 
 ```bash
 # Build the project
@@ -37,55 +226,42 @@ make test
 # Run linter
 make lint
 
-# Run all checks (format, lint, test, build)
+# Run all checks
 make all
-
-# See all available targets
-make help
 ```
 
-## 🏗️ Architecture Overview
+### Project Structure
 
-FreyjaDB uses a **log-structured merge (LSM) tree** approach with:
+```
+freyjadb/
+├── cmd/freyja/          # CLI commands
+├── pkg/
+│   ├── api/            # HTTP API and system store
+│   ├── bptree/         # B+ tree implementation
+│   ├── codec/          # Record encoding/decoding
+│   ├── index/          # Indexing components
+│   ├── query/          # Query engine
+│   └── store/          # Core storage engine
+├── docs/               # Documentation
+└── examples/           # Usage examples
+```
 
-1. **Append-only log files** for all writes
-2. **In-memory hash index** for fast key lookups  
-3. **Background compaction** to reclaim space from deleted/updated records
-4. **Hint files** for fast startup and index rebuilding
-5. **Partition layer** for DynamoDB-style data organization
+## 🤝 Contributing
 
-### Core Components
+FreyjaDB welcomes contributions! Please see our [Development Guide](docs/DEVELOPMENT.md) for:
 
-- **Record Codec**: Serialization format with CRC32 validation
-- **Log Writer**: Append-only writes with fsync batching
-- **Log Reader**: Sequential scanning with corruption detection
-- **Hash Index**: In-memory key → file offset mapping
-- **Compaction Engine**: Background merge and space reclamation
-- **Partition Manager**: Multi-keyspace support with sort key ranges
+- Code style guidelines
+- Testing practices
+- How to add new features
+- Pull request process
 
-## 📖 Usage
+## 📄 License
 
-> **Note**: FreyjaDB is currently in early development. The API is subject to change.
+FreyjaDB is released under the BSD 3-Clause License. See [LICENSE](LICENSE) for details.
 
-```go
-// Basic usage example (planned API)
-db, err := freyjadb.Open("./data")
-if err != nil {
-    log.Fatal(err)
-}
-defer db.Close()
+---
 
-// Simple key-value operations
-err = db.Put("user:123", []byte("john@example.com"))
-value, err := db.Get("user:123")
-err = db.Delete("user:123")
-
-// Partition key operations (DynamoDB-style)
-err = db.PutItem("users", "john@example.com", map[string]interface{}{
-    "email": "john@example.com",
-    "name":  "John Doe",
-    "age":   30,
-})
+> *FreyjaDB is named after Freyja, the Norse goddess associated with wisdom and foresight—qualities essential for a database that must reliably store and retrieve your data.*
 
 item, err := db.GetItem("users", "john@example.com")
 ```
