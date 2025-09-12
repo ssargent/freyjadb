@@ -407,7 +407,7 @@ func insertKeyInParent(tree *BPlusTree,
 	copy(parent.keys[idx+1:], parent.keys[idx:])
 	parent.keys[idx] = key
 
-	parent.children = append(parent.children, rightChild)
+	parent.children = append(parent.children, nil)
 	copy(parent.children[idx+2:], parent.children[idx+1:])
 	parent.children[idx+1] = rightChild
 
@@ -422,10 +422,6 @@ func insertKeyInParent(tree *BPlusTree,
 // splitInternalNode handles splitting an internal node that has overflowed.
 // Must be called with 'internal' locked in exclusive mode.
 func splitInternalNode(tree *BPlusTree, internal *node) {
-	if internal.parent == nil {
-		internal.mutex.Lock()
-		defer internal.mutex.Unlock()
-	}
 	mid := len(internal.keys) / 2
 	splitKey := internal.keys[mid]
 
@@ -469,10 +465,10 @@ func splitInternalNode(tree *BPlusTree, internal *node) {
 
 // Save serializes the B+Tree to a binary file.
 // This method is thread-safe and can be called concurrently with other operations.
-// It acquires a read lock on the tree to ensure consistency during serialization.
+// It acquires an exclusive lock on the tree to ensure consistency during serialization.
 func (tree *BPlusTree) Save(filename string) error {
-	tree.m.RLock()
-	defer tree.m.RUnlock()
+	tree.m.Lock()
+	defer tree.m.Unlock()
 
 	file, err := os.Create(filename)
 	if err != nil {
