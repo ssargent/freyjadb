@@ -204,13 +204,16 @@ freyja serve --api-key=user-secret-key --system-key=system-root-key --data-dir=.
 For developers working on macOS, Windows, or Linux systems without systemd, use the `init` command to set up the system store:
 
 ```bash
-# Initialize the system store for local development
+# Initialize the system store for local development (auto-generated API key)
 freyja init --system-key=my-system-secret --data-dir=./data
 
-# The above command will:
+# Or specify a custom system API key
+freyja init --system-key=my-system-secret --system-api-key=my-custom-api-key --data-dir=./data
+
+# The above commands will:
 # - Create the system data directory
 # - Initialize the encrypted system key-value store
-# - Store the system API key for administrative operations
+# - Store the system API key for administrative operations (generated or provided)
 # - Set up default system configuration
 
 # Now start the server (system key will be loaded automatically)

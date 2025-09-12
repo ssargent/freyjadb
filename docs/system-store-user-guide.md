@@ -32,30 +32,46 @@ The system store provides:
 First, initialize FreyjaDB's system store with encryption:
 
 ```bash
-# Initialize with encryption enabled
+# Initialize with encryption and auto-generated API key (recommended)
 freyja init --system-key="your-secure-system-key-here" --data-dir="./data"
 
-# Or initialize without encryption (not recommended for production)
-freyja init --system-key="your-system-key" --data-dir="./data"
+# Or specify a custom system API key
+freyja init --system-key="your-secure-system-key-here" --system-api-key="your-custom-api-key" --data-dir="./data"
 ```
 
 **Parameters:**
 - `--system-key`: A secure key for encrypting system data (minimum 32 characters recommended)
+- `--system-api-key`: (Optional) Custom API key for system administrative operations. If not provided, a secure random key will be generated and displayed.
 - `--data-dir`: Directory where FreyjaDB will store data (default: "./data")
+
+**Security Enhancement:** The `--system-key` is now used only for data encryption, while `--system-api-key` is used for API authentication. This separation improves security by allowing different keys for different purposes.
 
 **What happens during initialization:**
 1. Creates the system data directory (`./data/system/`)
 2. Initializes the encrypted system key-value store
-3. Creates a root system API key for administrative operations
+3. Creates a root system API key for administrative operations (using provided or generated key)
 4. Stores default system configuration
 
-**Example output:**
+**Example output (with auto-generated API key):**
 ```
 Initializing FreyjaDB system...
 Data directory: ./data
 System key: your-secure-syst...
 ✅ FreyjaDB system initialization completed successfully!
-System API key: your-secure-system-key-here
+System API key: bf31bd3e16b17fa922367aca1404b372679395676d0afd1a42b91a08349685e4
+Data directory: ./data
+
+You can now start the server with:
+  freyja serve --api-key=your-user-key --system-key=your-secure-system-key-here --data-dir=./data
+```
+
+**Example output (with custom API key):**
+```
+Initializing FreyjaDB system...
+Data directory: ./data
+System key: your-secure-syst...
+✅ FreyjaDB system initialization completed successfully!
+System API key: your-custom-api-key
 Data directory: ./data
 
 You can now start the server with:
@@ -224,7 +240,11 @@ Here's a complete example from fresh installation to using APIs:
 ### 1. Initialize System
 
 ```bash
+# Initialize with auto-generated API key (recommended)
 freyja init --system-key="MySuperSecureSystemKey12345!" --data-dir="./freyja-data"
+
+# Or with custom API key
+freyja init --system-key="MySuperSecureSystemKey12345!" --system-api-key="MyCustomSystemAPIKey!" --data-dir="./freyja-data"
 ```
 
 ### 2. Start Server
@@ -330,7 +350,11 @@ These endpoints require a user API key created through the system APIs.
 
 **Solution:**
 ```bash
+# Initialize with auto-generated API key
 freyja init --system-key="your-system-key" --data-dir="./data"
+
+# Or with custom API key
+freyja init --system-key="your-system-key" --system-api-key="your-api-key" --data-dir="./data"
 ```
 
 #### "Invalid API key" Error
