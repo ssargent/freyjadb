@@ -29,6 +29,7 @@ type SystemConfig struct {
 	DataDir          string
 	EncryptionKey    string
 	EnableEncryption bool
+	MaxRecordSize    int
 }
 
 // APIKey represents an API key stored in the system
@@ -87,6 +88,7 @@ func (s *SystemService) Open() error {
 	storeConfig := store.KVStoreConfig{
 		DataDir:       systemDataDir,
 		FsyncInterval: time.Second, // More frequent fsync for system data
+		MaxRecordSize: s.config.MaxRecordSize,
 	}
 
 	kvStore, err := store.NewKVStore(storeConfig)

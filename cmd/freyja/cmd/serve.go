@@ -108,7 +108,7 @@ func loadExistingSystemKey(dataDir string) (string, error) {
 	}
 
 	factory := container.GetSystemServiceFactory()
-	systemService, err := factory.CreateSystemService(dataDir, "dummy-key-for-loading", false)
+	systemService, err := factory.CreateSystemService(dataDir, "dummy-key-for-loading", false, 4096)
 	if err != nil {
 		return "", fmt.Errorf("failed to create system service: %w", err)
 	}

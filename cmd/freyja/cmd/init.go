@@ -82,7 +82,7 @@ Examples:
 
 		factory := container.GetSystemServiceFactory()
 
-		systemService, err := factory.CreateSystemService(systemDataDir, systemKey, true)
+		systemService, err := factory.CreateSystemService(systemDataDir, systemKey, true, 4096)
 		if err != nil {
 			cmd.Printf("Error creating system service: %v\n", err)
 			os.Exit(1)

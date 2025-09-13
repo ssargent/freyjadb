@@ -2,7 +2,9 @@ package store
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestKVStore_BasicOperations(t *testing.T) {
@@ -17,6 +19,7 @@ func TestKVStore_BasicOperations(t *testing.T) {
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
 		FsyncInterval: 0, // Immediate sync for testing
+		MaxRecordSize: 4096,
 	}
 
 	store, err := NewKVStore(config)
@@ -79,6 +82,7 @@ func TestKVStore_UpdateValue(t *testing.T) {
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
 		FsyncInterval: 0,
+		MaxRecordSize: 4096,
 	}
 
 	store, err := NewKVStore(config)
@@ -136,6 +140,7 @@ func TestKVStore_Reopen(t *testing.T) {
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
 		FsyncInterval: 0,
+		MaxRecordSize: 4096,
 	}
 
 	// First instance
@@ -194,6 +199,7 @@ func TestKVStore_Stats(t *testing.T) {
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
 		FsyncInterval: 0,
+		MaxRecordSize: 4096,
 	}
 
 	store, err := NewKVStore(config)
@@ -253,6 +259,7 @@ func TestKVStore_CrashSafeReopen_CleanFile(t *testing.T) {
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
 		FsyncInterval: 0,
+		MaxRecordSize: 4096,
 	}
 
 	// First instance - create and populate data
@@ -341,6 +348,7 @@ func TestKVStore_CrashSafeReopen_EmptyFile(t *testing.T) {
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
 		FsyncInterval: 0,
+		MaxRecordSize: 4096,
 	}
 
 	store, err := NewKVStore(config)
@@ -369,5 +377,103 @@ func TestKVStore_CrashSafeReopen_EmptyFile(t *testing.T) {
 
 	if !recoveryResult.IndexRebuilt {
 		t.Error("Expected index to be marked as rebuilt even for empty file")
+	}
+}
+
+func TestKVStore_ValidateLogFile_DecomposedFunctions(t *testing.T) {
+	// Test the decomposed functions individually
+	tmpDir, err := os.MkdirTemp("", "freyja_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := NewKVStore(KVStoreConfig{
+		DataDir:       tmpDir,
+		FsyncInterval: 0,
+		MaxRecordSize: 4096,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create KV store: %v", err)
+	}
+
+	// Test createEmptyRecoveryResult
+	startTime := time.Now()
+	result := store.createEmptyRecoveryResult(startTime)
+	if result.RecordsValidated != 0 {
+		t.Errorf("Expected 0 records validated, got %d", result.RecordsValidated)
+	}
+	if result.IndexRebuilt != true {
+		t.Error("Expected IndexRebuilt to be true")
+	}
+	if result.RecoveryTime < 0 {
+		t.Error("Expected non-negative recovery time")
+	}
+
+	// Test with non-existent file
+	nonExistentPath := filepath.Join(tmpDir, "nonexistent.data")
+	result, err = store.validateLogFile(nonExistentPath)
+	if err != nil {
+		t.Fatalf("Expected no error for non-existent file, got %v", err)
+	}
+	if result.RecordsValidated != 0 {
+		t.Errorf("Expected 0 records validated for non-existent file, got %d", result.RecordsValidated)
+	}
+}
+
+func TestKVStore_RecordSizeValidation(t *testing.T) {
+	// Create temporary directory for test
+	tmpDir, err := os.MkdirTemp("", "freyja_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create KV store with small max record size for testing
+	config := KVStoreConfig{
+		DataDir:       tmpDir,
+		FsyncInterval: 0,
+		MaxRecordSize: 100, // Small size for testing
+	}
+
+	store, err := NewKVStore(config)
+	if err != nil {
+		t.Fatalf("Failed to create KV store: %v", err)
+	}
+
+	_, err = store.Open()
+	if err != nil {
+		t.Fatalf("Failed to open KV store: %v", err)
+	}
+	defer store.Close()
+
+	// Test with record size within limit
+	smallKey := []byte("small_key")
+	smallValue := make([]byte, 50) // 50 bytes
+	for i := range smallValue {
+		smallValue[i] = byte(i % 256)
+	}
+
+	if err := store.Put(smallKey, smallValue); err != nil {
+		t.Fatalf("Failed to put small record: %v", err)
+	}
+
+	// Test with record size exceeding limit
+	largeKey := []byte("large_key")
+	largeValue := make([]byte, 200) // 200 bytes, exceeds 100 byte limit
+	for i := range largeValue {
+		largeValue[i] = byte(i % 256)
+	}
+
+	if err := store.Put(largeKey, largeValue); err != ErrRecordSizeExceeded {
+		t.Errorf("Expected ErrRecordSizeExceeded, got %v", err)
+	}
+
+	// Test with record size exactly at limit
+	exactKey := []byte("exact_key")
+	exactValue := make([]byte, 100-len(exactKey)) // Exactly at limit
+
+	if err := store.Put(exactKey, exactValue); err != nil {
+		t.Fatalf("Failed to put record at size limit: %v", err)
 	}
 }

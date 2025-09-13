@@ -23,7 +23,7 @@ func TestInitCommand(t *testing.T) {
 		container := di.NewContainer()
 		factory := container.GetSystemServiceFactory()
 
-		systemService, err := factory.CreateSystemService(dataDir, systemKey, true)
+		systemService, err := factory.CreateSystemService(dataDir, systemKey, true, 4096)
 		assert.NoError(t, err)
 
 		err = systemService.InitializeSystem(dataDir, systemKey, systemKey)
@@ -43,7 +43,7 @@ func TestInitCommand(t *testing.T) {
 		factory := container.GetSystemServiceFactory()
 
 		// First initialization
-		systemService, err := factory.CreateSystemService(dataDir, systemKey, true)
+		systemService, err := factory.CreateSystemService(dataDir, systemKey, true, 4096)
 		assert.NoError(t, err)
 		err = systemService.InitializeSystem(dataDir, systemKey, systemKey)
 		assert.NoError(t, err)
@@ -61,7 +61,7 @@ func TestInitCommand(t *testing.T) {
 		container := di.NewContainer()
 		factory := container.GetSystemServiceFactory()
 		invalidDir := "/invalid/path/that/does/not/exist"
-		systemService, err := factory.CreateSystemService(invalidDir, systemKey, true)
+		systemService, err := factory.CreateSystemService(invalidDir, systemKey, true, 4096)
 		// The factory should fail when trying to create the system directory
 		if err != nil {
 			assert.Error(t, err) // Factory failed as expected
@@ -75,7 +75,7 @@ func TestInitCommand(t *testing.T) {
 	t.Run("Empty system key", func(t *testing.T) {
 		container := di.NewContainer()
 		factory := container.GetSystemServiceFactory()
-		systemService, err := factory.CreateSystemService(dataDir, "", false)
+		systemService, err := factory.CreateSystemService(dataDir, "", false, 4096)
 		assert.NoError(t, err)
 		err = systemService.InitializeSystem(dataDir, "", "")
 		assert.NoError(t, err) // Should still work, just with empty key
@@ -96,7 +96,7 @@ func TestLoadExistingSystemKey(t *testing.T) {
 		// First initialize the system
 		container := di.NewContainer()
 		factory := container.GetSystemServiceFactory()
-		systemService, err := factory.CreateSystemService(dataDir, systemKey, true)
+		systemService, err := factory.CreateSystemService(dataDir, systemKey, true, 4096)
 		assert.NoError(t, err)
 		err = systemService.InitializeSystem(dataDir, systemKey, systemKey)
 		assert.NoError(t, err)

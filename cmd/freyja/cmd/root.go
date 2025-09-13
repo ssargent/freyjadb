@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ssargent/freyjadb/pkg/config"
 	"github.com/ssargent/freyjadb/pkg/di"
 	"github.com/ssargent/freyjadb/pkg/store"
 
@@ -28,7 +29,27 @@ optional partitioning and sort keys.`,
 		if err := os.MkdirAll(dataDir, 0750); err != nil {
 			return fmt.Errorf("failed to create data dir: %w", err)
 		}
-		kvStore, err := store.NewKVStore(store.KVStoreConfig{DataDir: dataDir})
+
+		// Load config if it exists, otherwise use defaults
+		var maxRecordSize int
+		configPath := config.GetDefaultConfigPath()
+		if config.ConfigExists(configPath) {
+			cfg, err := config.LoadConfig(configPath)
+			if err != nil {
+				// If config exists but can't be loaded, use default
+				maxRecordSize = 4096
+			} else {
+				maxRecordSize = cfg.Security.MaxRecordSize
+			}
+		} else {
+			// No config exists, use default
+			maxRecordSize = 4096
+		}
+
+		kvStore, err := store.NewKVStore(store.KVStoreConfig{
+			DataDir:       dataDir,
+			MaxRecordSize: maxRecordSize,
+		})
 		if err != nil {
 			return fmt.Errorf("failed to create store: %w", err)
 		}

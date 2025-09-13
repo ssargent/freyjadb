@@ -36,6 +36,7 @@ type HashIndexConfig struct {
 type KVStoreConfig struct {
 	DataDir       string        // Directory for data files
 	FsyncInterval time.Duration // Fsync interval for durability
+	MaxRecordSize int           // Maximum size of a single record in bytes
 }
 
 // RecoveryResult holds statistics about crash recovery operations
@@ -57,9 +58,10 @@ type RecordIterator interface {
 
 // Errors
 var (
-	ErrKeyNotFound = &KVError{"key not found"}
-	ErrInvalidKey  = &KVError{"invalid key"}
-	ErrCorruption  = &KVError{"data corruption detected"}
+	ErrKeyNotFound        = &KVError{"key not found"}
+	ErrInvalidKey         = &KVError{"invalid key"}
+	ErrCorruption         = &KVError{"data corruption detected"}
+	ErrRecordSizeExceeded = &KVError{"record size exceeds maximum allowed size"}
 )
 
 // KVError represents a key-value store error
