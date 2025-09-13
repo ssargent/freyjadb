@@ -146,8 +146,11 @@ var groupDeleteCmd = &cobra.Command{
 		if !config.Yes {
 			fmt.Printf("Are you sure you want to delete group '%s'? (y/N): ", id)
 			var response string
-			fmt.Scanln(&response)
-			if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
+			n, err := fmt.Scanln(&response)
+			if err != nil || n != 1 {
+				return fmt.Errorf("failed to read input: %w", err)
+			}
+			if strings.ToLower(response) != confirmYes && strings.ToLower(response) != confirmYesLong {
 				fmt.Println("Deletion cancelled")
 				return nil
 			}
@@ -165,7 +168,7 @@ var groupDeleteCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func setupGroupCommands() {
 	// Add flags to create command
 	groupCreateCmd.Flags().String("summary", "", "Group summary")
 	groupCreateCmd.Flags().String("tags", "", "Tags (comma-separated)")

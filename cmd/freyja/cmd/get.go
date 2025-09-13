@@ -37,6 +37,6 @@ Example:
 	},
 }
 
-func init() {
+func setupGetCmd() {
 	rootCmd.AddCommand(getCmd)
 }

@@ -12,6 +12,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const servicePath = "/etc/systemd/system/freyja.service"
+
 // installCmd represents the install command
 var installCmd = &cobra.Command{
 	Use:   "install",
@@ -112,7 +114,7 @@ Example:
 	},
 }
 
-func init() {
+func setupInstallCmd() {
 	rootCmd.AddCommand(installCmd)
 
 	installCmd.Flags().String("data-dir", "/opt/mythicalcodelabs/freyja/data", "Data directory for freyja")
@@ -209,7 +211,6 @@ RestartSec=5
 WantedBy=multi-user.target
 `, dataDir, systemKey, apiKey, port)
 
-	servicePath := "/etc/systemd/system/freyja.service"
 	file, err := os.Create(servicePath)
 	if err != nil {
 		return fmt.Errorf("failed to create service file: %w", err)

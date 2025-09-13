@@ -75,7 +75,15 @@ Examples:
 		serverFactory := container.GetServerFactory()
 		serverStarter := serverFactory.CreateServerStarter()
 
-		if err := serverStarter.StartServer(kv, port, apiKey, systemKey, dataDir, systemEncryptionKey, enableEncryption); err != nil {
+		if err := serverStarter.StartServer(
+			kv,
+			port,
+			apiKey,
+			systemKey,
+			dataDir,
+			systemEncryptionKey,
+			enableEncryption,
+		); err != nil {
 			cmd.Printf("Error starting server: %v\n", err)
 		}
 	},

@@ -138,27 +138,30 @@ func StartServer(store IKVStore, config ServerConfig) error {
 			html := `<!DOCTYPE html>
 <html>
 <head>
-	 <title>FreyjaDB API Documentation</title>
-	 <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@3.25.0/swagger-ui.css" />
+		<title>FreyjaDB API Documentation</title>
+		<link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@3.25.0/swagger-ui.css" />
 </head>
 <body>
-	 <div id="swagger-ui"></div>
-	 <script src="https://unpkg.com/swagger-ui-dist@3.25.0/swagger-ui-bundle.js"></script>
-	 <script>
-	   window.onload = function() {
-	     SwaggerUIBundle({
-	       url: '/swagger/swagger.json',
-	       dom_id: '#swagger-ui',
-	       presets: [
-	         SwaggerUIBundle.presets.apis,
-	         SwaggerUIBundle.presets.standalone
-	       ]
-	     });
-	   };
-	 </script>
+		<div id="swagger-ui"></div>
+		<script src="https://unpkg.com/swagger-ui-dist@3.25.0/swagger-ui-bundle.js"></script>
+		<script>
+			 window.onload = function() {
+			   SwaggerUIBundle({
+			     url: '/swagger/swagger.json',
+			     dom_id: '#swagger-ui',
+			     presets: [
+			       SwaggerUIBundle.presets.apis,
+			       SwaggerUIBundle.presets.standalone
+			     ]
+			   });
+			 };
+		</script>
 </body>
 </html>`
-			w.Write([]byte(html))
+			if _, err := w.Write([]byte(html)); err != nil {
+				http.Error(w, "Failed to write response", http.StatusInternalServerError)
+				return
+			}
 			return
 		}
 
@@ -171,7 +174,10 @@ func StartServer(store IKVStore, config ServerConfig) error {
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(doc))
+			if _, err := w.Write([]byte(doc)); err != nil {
+				http.Error(w, "Failed to write response", http.StatusInternalServerError)
+				return
+			}
 			return
 		}
 
@@ -184,7 +190,11 @@ func StartServer(store IKVStore, config ServerConfig) error {
 				return
 			}
 			w.Header().Set("Content-Type", "application/yaml")
-			w.Write([]byte(doc)) // Note: This serves JSON as YAML, for true YAML conversion you'd need a JSON to YAML converter
+			if _, err := w.Write([]byte(doc)); err != nil {
+				// Note: This serves JSON as YAML, for true YAML conversion you'd need a JSON to YAML converter
+				http.Error(w, "Failed to write response", http.StatusInternalServerError)
+				return
+			}
 			return
 		}
 

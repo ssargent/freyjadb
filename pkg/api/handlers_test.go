@@ -25,11 +25,7 @@ func TestContentTypeHandling(t *testing.T) {
 		contentType := ContentTypeJSON
 
 		encoded := encodeDataWithContentType(originalData, contentType)
-		decoded, decodedType, err := decodeDataWithContentType(encoded)
-
-		if err != nil {
-			t.Fatalf("Failed to decode: %v", err)
-		}
+		decoded, decodedType := decodeDataWithContentType(encoded)
 
 		if decodedType != contentType {
 			t.Errorf("Expected content type %d, got %d", contentType, decodedType)
@@ -44,11 +40,7 @@ func TestContentTypeHandling(t *testing.T) {
 		originalData := []byte("raw data without header")
 
 		// Data without header should be treated as raw bytes
-		decoded, decodedType, err := decodeDataWithContentType(originalData)
-
-		if err != nil {
-			t.Fatalf("Failed to decode: %v", err)
-		}
+		decoded, decodedType := decodeDataWithContentType(originalData)
 
 		if decodedType != ContentTypeRaw {
 			t.Errorf("Expected content type %d for raw data, got %d", ContentTypeRaw, decodedType)

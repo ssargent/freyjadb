@@ -1,0 +1,10 @@
+{
+    "go.lintFlags": [
+        "--config=${workspaceFolder}/.golangci.yml",
+        "--fast",
+        "--fix"
+    ],
+    "go.lintTool": "golangci-lint",
+    "editor.formatOnSave": true,
+    "go.lintOnSave": "package"
+}

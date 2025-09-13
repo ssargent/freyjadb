@@ -252,7 +252,9 @@ func BenchmarkLogReader_Seek(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		offset := int64(i % 1000000)
-		reader.Seek(offset)
+		if err := reader.Seek(offset); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -282,6 +284,8 @@ func BenchmarkLogReader_ReadAt(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		offset := int64(i % 1000000)
-		reader.ReadAt(offset)
+		if _, err := reader.ReadAt(offset); err != nil {
+			// Ignore error in benchmark
+		}
 	}
 }

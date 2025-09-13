@@ -146,8 +146,11 @@ var placeDeleteCmd = &cobra.Command{
 		if !config.Yes {
 			fmt.Printf("Are you sure you want to delete place '%s'? (y/N): ", id)
 			var response string
-			fmt.Scanln(&response)
-			if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
+			n, err := fmt.Scanln(&response)
+			if err != nil || n != 1 {
+				return fmt.Errorf("failed to read input: %w", err)
+			}
+			if strings.ToLower(response) != confirmYes && strings.ToLower(response) != confirmYesLong {
 				fmt.Println("Deletion cancelled")
 				return nil
 			}
@@ -165,7 +168,7 @@ var placeDeleteCmd = &cobra.Command{
 	},
 }
 
-func init() {
+func setupPlaceCommands() {
 	// Add flags to create command
 	placeCreateCmd.Flags().String("summary", "", "Place summary")
 	placeCreateCmd.Flags().String("tags", "", "Tags (comma-separated)")

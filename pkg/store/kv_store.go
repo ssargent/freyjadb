@@ -85,15 +85,21 @@ func (kv *KVStore) Open() (*RecoveryResult, error) {
 	}
 	reader, err := NewLogReader(readerConfig)
 	if err != nil {
-		kv.writer.Close()
+		if closeErr := kv.writer.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "Error closing writer: %v\n", closeErr)
+		}
 		return nil, err
 	}
 	kv.reader = reader
 
 	// Build index from validated data
 	if err := kv.index.BuildFromLog(kv.reader); err != nil {
-		kv.reader.Close()
-		kv.writer.Close()
+		if closeErr := kv.reader.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "Error closing reader: %v\n", closeErr)
+		}
+		if closeErr := kv.writer.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "Error closing writer: %v\n", closeErr)
+		}
 		return nil, err
 	}
 
@@ -155,9 +161,9 @@ func (kv *KVStore) putInternal(key, value []byte) error {
 	// Update index
 	record := codec.NewRecord(key, value)
 	entry := &IndexEntry{
-		FileID:    0,      // Single file for now
-		Offset:    offset, // LogWriter.Put() returns the starting offset
-		Size:      uint32(record.Size()),
+		FileID:    0,                     // Single file for now
+		Offset:    offset,                // LogWriter.Put() returns the starting offset
+		Size:      uint32(record.Size()), //nolint: gosec // Size is uint32
 		Timestamp: record.Timestamp,
 	}
 	kv.index.Put(key, entry)
@@ -210,9 +216,9 @@ func (kv *KVStore) Put(key, value []byte) error {
 	// Update index
 	record := codec.NewRecord(key, value)
 	entry := &IndexEntry{
-		FileID:    0,      // Single file for now
-		Offset:    offset, // LogWriter.Put() returns the starting offset
-		Size:      uint32(record.Size()),
+		FileID:    0,                     // Single file for now
+		Offset:    offset,                // LogWriter.Put() returns the starting offset
+		Size:      uint32(record.Size()), //nolint: gosec // Size is uint32
 		Timestamp: record.Timestamp,
 	}
 	kv.index.Put(key, entry)
@@ -346,11 +352,15 @@ func (kv *KVStore) validateLogFile(filePath string) (*RecoveryResult, error) {
 		}
 
 		if err := file.Truncate(lastValidOffset); err != nil {
-			file.Close()
+			if closeErr := file.Close(); closeErr != nil {
+				fmt.Fprintf(os.Stderr, "Error closing file: %v\n", closeErr)
+			}
 			return nil, err
 		}
 
-		file.Close()
+		if closeErr := file.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "Error closing file: %v\n", closeErr)
+		}
 		fileSizeAfter = lastValidOffset
 		recordsTruncated = 1 // We assume one corrupted record at the end
 	}
