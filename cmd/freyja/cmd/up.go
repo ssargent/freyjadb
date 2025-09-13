@@ -145,7 +145,7 @@ func initializeSystemIfNeeded(cfg *config.Config) error {
 
 	// Initialize system store
 	factory := container.GetSystemServiceFactory()
-	systemService, err := factory.CreateSystemService(systemDataDir, cfg.Security.SystemKey, true)
+	systemService, err := factory.CreateSystemService(systemDataDir, cfg.Security.SystemKey, true, cfg.Security.MaxRecordSize)
 	if err != nil {
 		return fmt.Errorf("failed to create system service: %w", err)
 	}

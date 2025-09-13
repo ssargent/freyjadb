@@ -52,11 +52,13 @@ func (s *DefaultServerStarter) StartServer(
 func (f *DefaultSystemServiceFactory) CreateSystemService(
 	dataDir, encryptionKey string,
 	enableEncryption bool,
+	maxRecordSize int,
 ) (SystemInitializer, error) {
 	config := SystemConfig{
 		DataDir:          dataDir,
 		EncryptionKey:    encryptionKey,
 		EnableEncryption: enableEncryption,
+		MaxRecordSize:    maxRecordSize,
 	}
 	return NewSystemService(config)
 }

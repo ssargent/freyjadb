@@ -21,7 +21,7 @@ type SystemInitializer interface {
 // SystemServiceFactory creates system services
 type SystemServiceFactory interface {
 	// CreateSystemService creates a new system service with the given config
-	CreateSystemService(dataDir, encryptionKey string, enableEncryption bool) (SystemInitializer, error)
+	CreateSystemService(dataDir, encryptionKey string, enableEncryption bool, maxRecordSize int) (SystemInitializer, error)
 }
 
 // ServerStarter defines the interface for starting the API server

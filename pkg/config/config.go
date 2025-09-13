@@ -24,9 +24,10 @@ type Config struct {
 
 // Security contains security-related configuration
 type Security struct {
-	SystemKey    string `yaml:"system_key"`
-	SystemAPIKey string `yaml:"system_api_key"`
-	ClientAPIKey string `yaml:"client_api_key"`
+	SystemKey     string `yaml:"system_key"`
+	SystemAPIKey  string `yaml:"system_api_key"`
+	ClientAPIKey  string `yaml:"client_api_key"`
+	MaxRecordSize int    `yaml:"max_record_size"`
 }
 
 // Logging contains logging configuration
@@ -41,9 +42,10 @@ func DefaultConfig() *Config {
 		Port:    8080,
 		Bind:    "127.0.0.1",
 		Security: Security{
-			SystemKey:    "auto",
-			SystemAPIKey: "auto",
-			ClientAPIKey: "auto",
+			SystemKey:     "auto",
+			SystemAPIKey:  "auto",
+			ClientAPIKey:  "auto",
+			MaxRecordSize: 4096, // 4KB default
 		},
 		Logging: Logging{
 			Level: "info",

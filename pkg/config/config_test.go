@@ -20,6 +20,7 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, "auto", config.Security.SystemKey)
 	assert.Equal(t, "auto", config.Security.SystemAPIKey)
 	assert.Equal(t, "auto", config.Security.ClientAPIKey)
+	assert.Equal(t, 4096, config.Security.MaxRecordSize)
 	assert.Equal(t, "info", config.Logging.Level)
 }
 
@@ -62,9 +63,10 @@ func TestLoadConfig(t *testing.T) {
 			Port:    9000,
 			Bind:    "0.0.0.0",
 			Security: Security{
-				SystemKey:    "test-system-key",
-				SystemAPIKey: "test-system-api-key",
-				ClientAPIKey: "test-client-api-key",
+				SystemKey:     "test-system-key",
+				SystemAPIKey:  "test-system-api-key",
+				ClientAPIKey:  "test-client-api-key",
+				MaxRecordSize: 4096,
 			},
 			Logging: Logging{
 				Level: "debug",
@@ -190,9 +192,10 @@ func TestConfigYAMLMarshalling(t *testing.T) {
 		Port:    9999,
 		Bind:    "localhost",
 		Security: Security{
-			SystemKey:    "system-key-123",
-			SystemAPIKey: "system-api-key-456",
-			ClientAPIKey: "client-api-key-789",
+			SystemKey:     "system-key-123",
+			SystemAPIKey:  "system-api-key-456",
+			ClientAPIKey:  "client-api-key-789",
+			MaxRecordSize: 4096,
 		},
 		Logging: Logging{
 			Level: "warn",

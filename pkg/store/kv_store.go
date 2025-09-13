@@ -152,6 +152,12 @@ func (kv *KVStore) putInternal(key, value []byte) error {
 		return ErrInvalidKey
 	}
 
+	// Validate record size
+	recordSize := len(key) + len(value)
+	if kv.config.MaxRecordSize > 0 && recordSize > kv.config.MaxRecordSize {
+		return ErrRecordSizeExceeded
+	}
+
 	// Write record to log
 	offset, err := kv.writer.Put(key, value)
 	if err != nil {
@@ -205,6 +211,12 @@ func (kv *KVStore) Put(key, value []byte) error {
 
 	if len(key) == 0 {
 		return ErrInvalidKey
+	}
+
+	// Validate record size
+	recordSize := len(key) + len(value)
+	if kv.config.MaxRecordSize > 0 && recordSize > kv.config.MaxRecordSize {
+		return ErrRecordSizeExceeded
 	}
 
 	// Write record to log
@@ -284,34 +296,68 @@ func (kv *KVStore) Close() error {
 func (kv *KVStore) validateLogFile(filePath string) (*RecoveryResult, error) {
 	startTime := time.Now()
 
-	// Get file size before validation
+	// Check if file exists and get initial stats
 	fileInfo, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist, nothing to validate
-			return &RecoveryResult{
-				RecordsValidated: 0,
-				RecordsTruncated: 0,
-				FileSizeBefore:   0,
-				FileSizeAfter:    0,
-				IndexRebuilt:     true,
-				RecoveryTime:     time.Since(startTime).Nanoseconds(),
-			}, nil
+			return kv.createEmptyRecoveryResult(startTime), nil
 		}
 		return nil, err
 	}
 
 	fileSizeBefore := fileInfo.Size()
 
-	// Create a temporary reader for validation
+	// Scan for corruption
+	recordsValidated, lastValidOffset, corruptionFound, err := kv.scanForCorruption(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Handle corruption recovery if needed
+	fileSizeAfter, recordsTruncated, err := kv.handleCorruptionRecovery(
+		filePath, corruptionFound, lastValidOffset, fileSizeBefore)
+	if err != nil {
+		return nil, err
+	}
+
+	return &RecoveryResult{
+		RecordsValidated: recordsValidated,
+		RecordsTruncated: recordsTruncated,
+		FileSizeBefore:   fileSizeBefore,
+		FileSizeAfter:    fileSizeAfter,
+		IndexRebuilt:     true,
+		RecoveryTime:     time.Since(startTime).Nanoseconds(),
+	}, nil
+}
+
+// createEmptyRecoveryResult creates a recovery result for non-existent files
+func (kv *KVStore) createEmptyRecoveryResult(startTime time.Time) *RecoveryResult {
+	return &RecoveryResult{
+		RecordsValidated: 0,
+		RecordsTruncated: 0,
+		FileSizeBefore:   0,
+		FileSizeAfter:    0,
+		IndexRebuilt:     true,
+		RecoveryTime:     time.Since(startTime).Nanoseconds(),
+	}
+}
+
+// scanForCorruption scans the log file for corruption and returns validation results
+func (kv *KVStore) scanForCorruption(filePath string) (int64, int64, bool, error) {
 	reader, err := NewLogReader(LogReaderConfig{
 		FilePath:    filePath,
 		StartOffset: 0,
 	})
 	if err != nil {
-		return nil, err
+		return 0, -1, false, err
 	}
-	defer reader.Close()
+	defer func() {
+		if closeErr := reader.Close(); closeErr != nil {
+			// Log error but don't fail the operation
+			fmt.Fprintf(os.Stderr, "Error closing reader: %v\n", closeErr)
+		}
+	}()
 
 	var recordsValidated int64
 	var lastValidOffset int64 = -1
@@ -339,40 +385,49 @@ func (kv *KVStore) validateLogFile(filePath string) (*RecoveryResult, error) {
 		lastValidOffset = reader.Offset()
 	}
 
-	// If corruption was found, truncate the file
-	var fileSizeAfter = fileSizeBefore
+	return recordsValidated, lastValidOffset, corruptionFound, nil
+}
+
+// handleCorruptionRecovery handles file truncation when corruption is detected
+func (kv *KVStore) handleCorruptionRecovery(
+	filePath string,
+	corruptionFound bool,
+	lastValidOffset int64,
+	fileSizeBefore int64,
+) (int64, int64, error) {
+	fileSizeAfter := fileSizeBefore
 	var recordsTruncated int64
 
 	if corruptionFound && lastValidOffset >= 0 {
-		// Truncate the file to the last valid record
-		filePath = filepath.Clean(filePath)
-		file, err := os.OpenFile(filePath, os.O_RDWR, 0600)
+		err := kv.truncateCorruptedFile(filePath, lastValidOffset)
 		if err != nil {
-			return nil, err
-		}
-
-		if err := file.Truncate(lastValidOffset); err != nil {
-			if closeErr := file.Close(); closeErr != nil {
-				fmt.Fprintf(os.Stderr, "Error closing file: %v\n", closeErr)
-			}
-			return nil, err
-		}
-
-		if closeErr := file.Close(); closeErr != nil {
-			fmt.Fprintf(os.Stderr, "Error closing file: %v\n", closeErr)
+			return 0, 0, err
 		}
 		fileSizeAfter = lastValidOffset
 		recordsTruncated = 1 // We assume one corrupted record at the end
 	}
 
-	return &RecoveryResult{
-		RecordsValidated: recordsValidated,
-		RecordsTruncated: recordsTruncated,
-		FileSizeBefore:   fileSizeBefore,
-		FileSizeAfter:    fileSizeAfter,
-		IndexRebuilt:     true,
-		RecoveryTime:     time.Since(startTime).Nanoseconds(),
-	}, nil
+	return fileSizeAfter, recordsTruncated, nil
+}
+
+// truncateCorruptedFile truncates the file to remove corrupted records
+func (kv *KVStore) truncateCorruptedFile(filePath string, offset int64) error {
+	cleanPath := filepath.Clean(filePath)
+	file, err := os.OpenFile(cleanPath, os.O_RDWR, 0600)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "Error closing file: %v\n", closeErr)
+		}
+	}()
+
+	if err := file.Truncate(offset); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Stats returns store statistics

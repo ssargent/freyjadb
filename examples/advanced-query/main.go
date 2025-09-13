@@ -86,6 +86,7 @@ func main() {
 	kvConfig := store.KVStoreConfig{
 		DataDir:       tempDir,
 		FsyncInterval: 100 * time.Millisecond,
+		MaxRecordSize: 4096, // 4KB default
 	}
 	kvStore, err := store.NewKVStore(kvConfig)
 	if err != nil {

@@ -23,6 +23,7 @@ func NewLoreStore(projectDir string) (*LoreStore, error) {
 	config := store.KVStoreConfig{
 		DataDir:       dataDir,
 		FsyncInterval: time.Second, // fsync every second for durability
+		MaxRecordSize: 4096,        // 4KB default
 	}
 
 	kvStore, err := store.NewKVStore(config)
