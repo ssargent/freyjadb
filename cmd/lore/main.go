@@ -15,6 +15,11 @@ type Config struct {
 	Yes        bool
 }
 
+const (
+	confirmYes     = "y"
+	confirmYesLong = "yes"
+)
+
 // Global variables
 var (
 	config    Config
@@ -23,13 +28,17 @@ var (
 )
 
 func main() {
+	setupRootCmd()
+	setupCharacterCommands()
+	setupGroupCommands()
+	setupPlaceCommands()
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func init() {
+func setupRootCmd() {
 	rootCmd = &cobra.Command{
 		Use:   "lore",
 		Short: "Book Lore CLI - Manage writing reference notes",
@@ -37,9 +46,9 @@ func init() {
 reference notes about characters, places, and groups.
 
 Examples:
-  lore character create "John Doe" --summary "A brave knight"
-  lore place list
-  lore group get merchants-guild`,
+   lore character create "John Doe" --summary "A brave knight"
+   lore place list
+   lore group get merchants-guild`,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			// Initialize store
 			var err error

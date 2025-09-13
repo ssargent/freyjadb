@@ -307,7 +307,9 @@ func TestLogWriter_ConcurrentAccess(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			key := []byte(fmt.Sprintf("key_%d", i))
 			value := []byte(fmt.Sprintf("value_%d", i))
-			writer.Put(key, value)
+			if _, err := writer.Put(key, value); err != nil {
+				t.Errorf("Put error: %v", err)
+			}
 		}
 		done <- true
 	}()
@@ -315,7 +317,9 @@ func TestLogWriter_ConcurrentAccess(t *testing.T) {
 	// Goroutine 2: Sync operations
 	go func() {
 		for i := 0; i < 10; i++ {
-			writer.Sync()
+			if err := writer.Sync(); err != nil {
+				t.Errorf("Sync error: %v", err)
+			}
 			time.Sleep(time.Millisecond)
 		}
 		done <- true
@@ -347,7 +351,9 @@ func BenchmarkLogWriter_Put(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key := []byte(fmt.Sprintf("bench_key_%d", i))
 		value := []byte(fmt.Sprintf("bench_value_%d", i))
-		writer.Put(key, value)
+		if _, err := writer.Put(key, value); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -372,6 +378,8 @@ func BenchmarkLogWriter_PutWithFsync(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key := []byte(fmt.Sprintf("bench_key_%d", i))
 		value := []byte(fmt.Sprintf("bench_value_%d", i))
-		writer.Put(key, value)
+		if _, err := writer.Put(key, value); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

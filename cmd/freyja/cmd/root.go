@@ -57,6 +57,11 @@ func Execute() {
 func init() {
 	// Global data directory flag
 	rootCmd.PersistentFlags().StringP("data-dir", "d", "./data", "Data directory for the store")
+
+	// Setup commands
+	setupDeleteCmd()
+	setupGetCmd()
+	setupInstallCmd()
 }
 
 // SetContainer sets the dependency injection container for the cmd package

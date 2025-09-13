@@ -186,12 +186,7 @@ func (s *Server) handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Decode the data and extract content type
-	data, contentType, err := decodeDataWithContentType(encodedValue)
-	if err != nil {
-		s.metrics.RecordDBOperation("get", false, time.Since(start))
-		sendError(w, "Failed to decode stored data", http.StatusInternalServerError)
-		return
-	}
+	data, contentType := decodeDataWithContentType(encodedValue)
 
 	s.metrics.RecordDBOperation("get", true, time.Since(start))
 
@@ -232,7 +227,10 @@ func (s *Server) handleGet(w http.ResponseWriter, r *http.Request) {
 		// Original behavior: return raw data
 		contentTypeHeader := getContentTypeHeader(contentType)
 		w.Header().Set("Content-Type", contentTypeHeader)
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			sendError(w, "Failed to write response", http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
@@ -482,20 +480,20 @@ func encodeDataWithContentType(data []byte, contentType int) []byte {
 }
 
 // decodeDataWithContentType decodes data and extracts content-type metadata
-func decodeDataWithContentType(encodedData []byte) ([]byte, int, error) {
+func decodeDataWithContentType(encodedData []byte) ([]byte, int) {
 	if len(encodedData) < ContentTypeHeader {
 		// No header present, treat as raw bytes (backward compatibility)
-		return encodedData, ContentTypeRaw, nil
+		return encodedData, ContentTypeRaw
 	}
 
 	contentType := int(encodedData[0])
 	if encodedData[1] != 0 {
 		// Invalid header format, treat as raw bytes
-		return encodedData, ContentTypeRaw, nil
+		return encodedData, ContentTypeRaw
 	}
 
 	data := encodedData[ContentTypeHeader:]
-	return data, contentType, nil
+	return data, contentType
 }
 
 // getContentTypeFromHeader extracts content type from HTTP Content-Type header

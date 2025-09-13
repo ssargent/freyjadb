@@ -8,9 +8,11 @@ import (
 	"time"
 )
 
+const formatJSON = "json"
+
 // outputEntity displays a single entity
 func outputEntity(entity *Entity) error {
-	if config.Format == "json" {
+	if config.Format == formatJSON {
 		return outputEntityJSON(entity)
 	}
 	return outputEntityTable(entity)
@@ -18,7 +20,7 @@ func outputEntity(entity *Entity) error {
 
 // outputEntities displays multiple entities
 func outputEntities(entities []*Entity) error {
-	if config.Format == "json" {
+	if config.Format == formatJSON {
 		return outputEntitiesJSON(entities)
 	}
 	return outputEntitiesTable(entities)
@@ -27,34 +29,54 @@ func outputEntities(entities []*Entity) error {
 // outputEntityTable displays a single entity in table format
 func outputEntityTable(entity *Entity) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	defer w.Flush()
+	defer func() { _ = w.Flush() }()
 
-	fmt.Fprintf(w, "ID:\t%s\n", entity.ID)
-	fmt.Fprintf(w, "Type:\t%s\n", entity.Type)
-	fmt.Fprintf(w, "Name:\t%s\n", entity.Name)
+	if _, err := fmt.Fprintf(w, "ID:\t%s\n", entity.ID); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Type:\t%s\n", entity.Type); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Name:\t%s\n", entity.Name); err != nil {
+		return err
+	}
 
 	if len(entity.Aka) > 0 {
-		fmt.Fprintf(w, "AKA:\t%s\n", formatStringSlice(entity.Aka))
+		if _, err := fmt.Fprintf(w, "AKA:\t%s\n", formatStringSlice(entity.Aka)); err != nil {
+			return err
+		}
 	}
 
 	if entity.Summary != "" {
-		fmt.Fprintf(w, "Summary:\t%s\n", entity.Summary)
+		if _, err := fmt.Fprintf(w, "Summary:\t%s\n", entity.Summary); err != nil {
+			return err
+		}
 	}
 
 	if entity.Details != "" {
-		fmt.Fprintf(w, "Details:\t%s\n", entity.Details)
+		if _, err := fmt.Fprintf(w, "Details:\t%s\n", entity.Details); err != nil {
+			return err
+		}
 	}
 
 	if len(entity.Tags) > 0 {
-		fmt.Fprintf(w, "Tags:\t%s\n", formatStringSlice(entity.Tags))
+		if _, err := fmt.Fprintf(w, "Tags:\t%s\n", formatStringSlice(entity.Tags)); err != nil {
+			return err
+		}
 	}
 
 	if len(entity.Links) > 0 {
-		fmt.Fprintf(w, "Links:\t%d relationships\n", len(entity.Links))
+		if _, err := fmt.Fprintf(w, "Links:\t%d relationships\n", len(entity.Links)); err != nil {
+			return err
+		}
 	}
 
-	fmt.Fprintf(w, "Created:\t%s\n", entity.CreatedAt.Format(time.RFC3339))
-	fmt.Fprintf(w, "Updated:\t%s\n", entity.UpdatedAt.Format(time.RFC3339))
+	if _, err := fmt.Fprintf(w, "Created:\t%s\n", entity.CreatedAt.Format(time.RFC3339)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Updated:\t%s\n", entity.UpdatedAt.Format(time.RFC3339)); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -67,7 +89,7 @@ func outputEntitiesTable(entities []*Entity) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	defer w.Flush()
+	defer func() { _ = w.Flush() }()
 
 	fmt.Fprintln(w, "ID\tNAME\tTYPE\tSUMMARY\tTAGS\tUPDATED")
 
@@ -113,7 +135,7 @@ func outputEntitiesJSON(entities []*Entity) error {
 
 // outputEntityWithRelationships displays an entity with its relationships
 func outputEntityWithRelationships(entityWithRels *EntityWithRelationships) error {
-	if config.Format == "json" {
+	if config.Format == formatJSON {
 		return outputEntityWithRelationshipsJSON(entityWithRels)
 	}
 	return outputEntityWithRelationshipsTable(entityWithRels)

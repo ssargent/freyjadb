@@ -132,7 +132,7 @@ func TestSimpleQueryEngine_ExecuteQuery(t *testing.T) {
 		Value:    25,
 	}
 
-	iterator, err := engine.ExecuteQuery(nil, "test-partition", query, extractor)
+	iterator, err := engine.ExecuteQuery(context.Background(), "test-partition", query, extractor)
 	if err != nil {
 		t.Fatalf("ExecuteQuery failed: %v", err)
 	}

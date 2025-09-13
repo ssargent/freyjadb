@@ -41,7 +41,7 @@ func TestDataCorruptionScenarios(t *testing.T) {
 func testImmediateReadAfterWrite(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "kv_corruption_immediate")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	config := KVStoreConfig{
 		DataDir:       tmpDir,

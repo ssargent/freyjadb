@@ -27,7 +27,11 @@ type SystemServiceFactory interface {
 // ServerStarter defines the interface for starting the API server
 type ServerStarter interface {
 	// StartServer starts the API server with the given configuration
-	StartServer(kvStore *store.KVStore, port int, apiKey, systemKey, dataDir, systemEncryptionKey string, enableEncryption bool) error
+	StartServer(kvStore *store.KVStore,
+		port int,
+		apiKey, systemKey, dataDir, systemEncryptionKey string,
+		enableEncryption bool,
+	) error
 }
 
 // ServerFactory creates server instances

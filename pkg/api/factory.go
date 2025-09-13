@@ -30,7 +30,12 @@ func (f *DefaultServerFactory) CreateServerStarter() ServerStarter {
 type DefaultServerStarter struct{}
 
 // StartServer starts the API server with the given configuration
-func (s *DefaultServerStarter) StartServer(kvStore *store.KVStore, port int, apiKey, systemKey, dataDir, systemEncryptionKey string, enableEncryption bool) error {
+func (s *DefaultServerStarter) StartServer(
+	kvStore *store.KVStore,
+	port int,
+	apiKey, systemKey, dataDir, systemEncryptionKey string,
+	enableEncryption bool,
+) error {
 	config := ServerConfig{
 		Port:                port,
 		APIKey:              apiKey,
@@ -44,7 +49,10 @@ func (s *DefaultServerStarter) StartServer(kvStore *store.KVStore, port int, api
 }
 
 // CreateSystemService creates a new system service with the given config
-func (f *DefaultSystemServiceFactory) CreateSystemService(dataDir, encryptionKey string, enableEncryption bool) (SystemInitializer, error) {
+func (f *DefaultSystemServiceFactory) CreateSystemService(
+	dataDir, encryptionKey string,
+	enableEncryption bool,
+) (SystemInitializer, error) {
 	config := SystemConfig{
 		DataDir:          dataDir,
 		EncryptionKey:    encryptionKey,

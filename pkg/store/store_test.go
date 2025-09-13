@@ -269,7 +269,9 @@ func BenchmarkStore_Put(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key := []byte(fmt.Sprintf("bench_key_%d", i))
 		value := []byte(fmt.Sprintf("bench_value_%d", i))
-		store.Put(key, value)
+		if err := store.Put(key, value); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

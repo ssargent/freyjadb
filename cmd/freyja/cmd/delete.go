@@ -36,6 +36,6 @@ Example:
 	},
 }
 
-func init() {
+func setupDeleteCmd() {
 	rootCmd.AddCommand(deleteCmd)
 }

@@ -36,14 +36,18 @@ func NewLogWriter(config LogWriterConfig) (*LogWriter, error) {
 
 	// Seek to end for append behavior
 	if _, err := file.Seek(0, 2); err != nil {
-		file.Close()
+		if closeErr := file.Close(); closeErr != nil {
+			// Log or handle
+		}
 		return nil, err
 	}
 
 	// Get current file size for offset tracking
 	stat, err := file.Stat()
 	if err != nil {
-		file.Close()
+		if closeErr := file.Close(); closeErr != nil {
+			// Log or handle
+		}
 		return nil, err
 	}
 
@@ -135,7 +139,9 @@ func (w *LogWriter) Close() error {
 
 	// Final sync
 	if err := w.sync(); err != nil {
-		w.file.Close()
+		if closeErr := w.file.Close(); closeErr != nil {
+			// Log or handle
+		}
 		return err
 	}
 

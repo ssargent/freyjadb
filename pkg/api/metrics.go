@@ -9,6 +9,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+const (
+	statusSuccess = "success"
+	statusError   = "error"
+)
+
 // Metrics holds all Prometheus metrics for the API
 type Metrics struct {
 	// HTTP request metrics
@@ -134,9 +139,9 @@ func (m *Metrics) RecordHTTPRequest(method, endpoint string, statusCode int, dur
 
 // RecordDBOperation records a database operation
 func (m *Metrics) RecordDBOperation(operation string, success bool, duration time.Duration) {
-	status := "success"
+	status := statusSuccess
 	if !success {
-		status = "error"
+		status = statusError
 	}
 
 	m.dbOperationsTotal.WithLabelValues(operation, status).Inc()
@@ -151,27 +156,27 @@ func (m *Metrics) UpdateDBStats(keys int, dataSize int64) {
 
 // RecordAuthRequest records an authentication request
 func (m *Metrics) RecordAuthRequest(success bool) {
-	status := "success"
+	status := statusSuccess
 	if !success {
-		status = "error"
+		status = statusError
 	}
 	m.authRequestsTotal.WithLabelValues(status).Inc()
 }
 
 // RecordRelationshipOperation records a relationship operation
 func (m *Metrics) RecordRelationshipOperation(operation string, success bool) {
-	status := "success"
+	status := statusSuccess
 	if !success {
-		status = "error"
+		status = statusError
 	}
 	m.relationshipOperationsTotal.WithLabelValues(operation, status).Inc()
 }
 
 // RecordHealthCheck records a health check
 func (m *Metrics) RecordHealthCheck(success bool) {
-	status := "success"
+	status := statusSuccess
 	if !success {
-		status = "error"
+		status = statusError
 	}
 	m.healthChecksTotal.WithLabelValues(status).Inc()
 }
