@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -51,7 +52,12 @@ func NewSystemService(config SystemConfig) (*SystemService, error) {
 	// Initialize encryption if enabled
 	var gcm cipher.AEAD
 	if config.EnableEncryption && config.EncryptionKey != "" {
-		block, err := aes.NewCipher([]byte(config.EncryptionKey))
+		// Derive a 32-byte AES-256 key from the input using SHA-256
+		// This allows users to provide keys of any length
+		keyHash := sha256.Sum256([]byte(config.EncryptionKey))
+		encryptionKey := keyHash[:]
+
+		block, err := aes.NewCipher(encryptionKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create cipher: %w", err)
 		}

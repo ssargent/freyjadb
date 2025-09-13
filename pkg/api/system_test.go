@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -190,5 +191,54 @@ func TestSystemService(t *testing.T) {
 		retrieved, err := service.GetAPIKey("encrypted-key")
 		assert.NoError(t, err)
 		assert.Equal(t, "super-secret-key", retrieved.Key)
+	})
+
+	t.Run("Key Derivation", func(t *testing.T) {
+		tmpDir, err := os.MkdirTemp("", "freyja_system_test_keyderiv")
+		assert.NoError(t, err)
+		defer os.RemoveAll(tmpDir)
+
+		// Test with various key lengths - all should work due to SHA-256 derivation
+		testKeys := []string{
+			"short",                            // 5 bytes
+			"cuddly-kitten",                    // 13 bytes (original failing case)
+			"medium-length-key-for-testing",    // 28 bytes
+			"12345678901234567890123456789012", // 32 bytes (exact)
+		}
+
+		for _, testKey := range testKeys {
+			t.Run(fmt.Sprintf("key_%d_bytes", len(testKey)), func(t *testing.T) {
+				config := SystemConfig{
+					DataDir:          tmpDir,
+					EncryptionKey:    testKey,
+					EnableEncryption: true,
+				}
+
+				service, err := NewSystemService(config)
+				assert.NoError(t, err)
+				defer service.Close()
+
+				err = service.Open()
+				assert.NoError(t, err)
+
+				// Create API key
+				apiKey := APIKey{
+					ID:          "test-key-" + testKey,
+					Key:         "test-value",
+					Description: "Test API key with derived key",
+					CreatedAt:   time.Now(),
+					IsActive:    true,
+				}
+
+				// Store API key (should be encrypted with derived key)
+				err = service.StoreAPIKey(apiKey)
+				assert.NoError(t, err)
+
+				// Retrieve and validate API key (should be decrypted with same derived key)
+				retrieved, err := service.GetAPIKey("test-key-" + testKey)
+				assert.NoError(t, err)
+				assert.Equal(t, "test-value", retrieved.Key)
+			})
+		}
 	})
 }

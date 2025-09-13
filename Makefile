@@ -234,6 +234,11 @@ docs:
 	@echo "$(BLUE)Generating documentation...$(NC)"
 	$(GOCMD) doc -all > docs/API.md
 
+# Generate Swagger documentation
+swagger:
+	@echo "$(BLUE)Generating Swagger documentation...$(NC)"
+	swag init -g pkg/api/server.go -o pkg/api
+
 # Show project statistics
 stats:
 	@echo "$(BLUE)Project Statistics:$(NC)"
@@ -297,5 +302,6 @@ help:
 	@echo ""
 	@echo "$(BLUE)Utility Targets:$(NC)"
 	@echo "  docs            Generate documentation"
+	@echo "  swagger         Generate Swagger documentation"
 	@echo "  stats           Show project statistics"
 	@echo "  help            Show this help message"

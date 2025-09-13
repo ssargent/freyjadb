@@ -12,19 +12,41 @@ A **small, embeddable key-value database** built with ❤️ in Go. FreyjaDB pro
 
 ## 🚀 Quick Start
 
-### 1. Initialize the System Store
+### Option 1: One-Command Setup (Recommended)
 
 ```bash
-# Initialize with encryption and auto-generated API key (recommended)
+# Bootstrap and start FreyjaDB in one command
+freyja up
+
+# Or with custom settings
+freyja up --data-dir="./mydata" --port=9000
+```
+
+**What's included:**
+- ✅ Automatic configuration generation
+- ✅ Secure key generation and storage
+- ✅ System store initialization
+- ✅ Server startup on http://localhost:8080
+
+**Get your API key:**
+```bash
+# The generated client API key is displayed on first run
+freyja up --print-keys
+```
+
+### Option 2: Manual Setup (Advanced)
+
+#### 1. Initialize the System Store
+
+```bash
+# Initialize with encryption and auto-generated API key
 freyja init --system-key="your-secure-system-key-here" --data-dir="./data"
 
 # Or specify a custom system API key
 freyja init --system-key="your-secure-system-key-here" --system-api-key="your-custom-api-key" --data-dir="./data"
 ```
 
-**Security Enhancement:** The `--system-key` is now used only for data encryption, while `--system-api-key` is used for API authentication. If you don't provide `--system-api-key`, a secure random key will be generated and displayed.
-
-### 2. Start the Server
+#### 2. Start the Server
 
 ```bash
 # Start with system store support
@@ -41,23 +63,107 @@ freyja serve \
 ```bash
 # Store data
 curl -X PUT http://localhost:8080/api/v1/kv/mykey \
-  -H "X-API-Key: your-user-api-key" \
+  -H "X-API-Key: your-generated-api-key" \
   -d "Hello, FreyjaDB!"
 
 # Retrieve data
 curl -X GET http://localhost:8080/api/v1/kv/mykey \
-  -H "X-API-Key: your-user-api-key"
+  -H "X-API-Key: your-generated-api-key"
 ```
+
+### Option 3: Systemd Service (Production)
+
+```bash
+# Install as systemd service
+sudo freyja service install
+
+# Service will start automatically on boot
+# Check status
+sudo systemctl status freyja.service
+
+# View logs
+sudo journalctl -u freyja.service -f
+```
+
+## 🖥️ CLI Commands
+
+FreyjaDB provides a modern, ergonomic CLI with both simple and advanced usage patterns:
+
+### Core Commands
+
+- **`freyja up`** - One-command bootstrap and server start (recommended for most users)
+- **`freyja service`** - Systemd service management for production deployments
+- **`freyja init`** - Manual system store initialization (advanced users)
+- **`freyja serve`** - Manual server start (advanced users)
+
+### Command Reference
+
+#### freyja up
+```bash
+freyja up [options]
+
+Options:
+  --data-dir string     Data directory (default "./data")
+  --port int           Port to listen on (default 8080)
+  --bind string        Address to bind server to (default "127.0.0.1")
+  --config string      Path to config file (default OS-specific location)
+  --print-keys         Print generated API keys to console
+```
+
+#### freyja service
+```bash
+freyja service <command> [options]
+
+Commands:
+  install    Install FreyjaDB as a systemd service
+  start      Start the FreyjaDB service
+  stop       Stop the FreyjaDB service
+  restart    Restart the FreyjaDB service
+  status     Show service status
+  logs       Show service logs
+  uninstall  Remove the systemd service
+
+Install options:
+  --data-dir string    Data directory (default "/var/lib/freyjadb")
+  --config string      Path to config file
+  --user string        User to run service as (default "freyja")
+  --port int          Port for service (default 8080)
+  --start             Start service after installation (default true)
+```
+
+### Migration Guide
+
+**From old workflow:**
+```bash
+freyja init --system-key=... --data-dir=./data
+freyja serve --api-key=... --system-key=... --data-dir=./data
+```
+
+**To new workflow:**
+```bash
+freyja up  # That's it!
+```
+
+The old commands (`init` and `serve`) are still available for advanced users and backward compatibility.
 
 ## 🔌 Usage Options
 
-FreyjaDB can be used in two ways:
+FreyjaDB can be used in three ways:
 
-### Option 1: HTTP REST API (Recommended for most use cases)
+### Option 1: CLI with HTTP REST API (Recommended for most use cases)
 
-Start the server and use HTTP endpoints for data operations.
+Use the modern CLI commands to start a server and interact via HTTP endpoints:
 
-### Option 2: Embedded Database (Direct Integration into Go Applications)
+```bash
+freyja up  # Start server
+curl -X PUT http://localhost:8080/api/v1/kv/mykey -H "X-API-Key: $(freyja up --print-keys | grep 'Client API Key')" -d "Hello!"
+```
+
+### Option 2: HTTP REST API Only (Advanced)
+
+Start the server manually and use HTTP endpoints for data operations.
+
+### Option 3: Embedded Database (Direct Integration into Go Applications)
 
 For scenarios where you want to embed the key-value store directly into your Go application—bypassing the HTTP server and API key authentication entirely—FreyjaDB provides a lightweight, high-performance embedded mode. This approach is ideal for:
 

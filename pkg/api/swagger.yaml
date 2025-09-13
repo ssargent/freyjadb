@@ -1,5 +1,20 @@
 basePath: /api/v1
 definitions:
+  api.APIKey:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      key:
+        type: string
+    type: object
   api.KeyValueResponse:
     properties:
       content_type:
@@ -405,6 +420,194 @@ paths:
       summary: Get database statistics
       tags:
       - diagnostics
+  /system/api-keys:
+    get:
+      description: Get a list of all API key IDs
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: List all API keys
+      tags:
+      - system
+    post:
+      consumes:
+      - application/json
+      description: Create a new API key for user authentication
+      parameters:
+      - description: API key details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.APIKey'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Create a new API key
+      tags:
+      - system
+  /system/api-keys/{id}:
+    delete:
+      description: Delete a specific API key
+      parameters:
+      - description: API key ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Delete an API key
+      tags:
+      - system
+    get:
+      description: Get details of a specific API key
+      parameters:
+      - description: API key ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.APIKey'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get API key details
+      tags:
+      - system
+  /system/config/{key}:
+    get:
+      description: Get a system configuration value
+      parameters:
+      - description: Configuration key
+        in: path
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get system configuration
+      tags:
+      - system
+    put:
+      consumes:
+      - application/json
+      description: Set a system configuration value
+      parameters:
+      - description: Configuration key
+        in: path
+        name: key
+        required: true
+        type: string
+      - description: Configuration value
+        in: body
+        name: value
+        required: true
+        schema: {}
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Set system configuration
+      tags:
+      - system
 securityDefinitions:
   ApiKeyAuth:
     in: header
