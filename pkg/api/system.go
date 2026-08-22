@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ssargent/freyjadb/pkg/store"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 // SystemService provides internal APIs for managing system-level data
@@ -30,6 +31,7 @@ type SystemConfig struct {
 	EncryptionKey    string
 	EnableEncryption bool
 	MaxRecordSize    int
+	Salt             []byte
 }
 
 // APIKey represents an API key stored in the system
@@ -53,20 +55,9 @@ func NewSystemService(config SystemConfig) (*SystemService, error) {
 	// Initialize encryption if enabled
 	var gcm cipher.AEAD
 	if config.EnableEncryption && config.EncryptionKey != "" {
-		// Derive a 32-byte AES-256 key from the input using SHA-256
-		// This allows users to provide keys of any length
-		keyHash := sha256.Sum256([]byte(config.EncryptionKey))
-		encryptionKey := keyHash[:]
-
-		block, err := aes.NewCipher(encryptionKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create cipher: %w", err)
-		}
-
-		gcm, err = cipher.NewGCM(block)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create GCM: %w", err)
-		}
+		// We'll initialize the encryption when the service is opened and we can access the stored salt
+		// For now, we'll set gcm to nil and defer key derivation until Open()
+		gcm = nil
 	}
 
 	service := &SystemService{
@@ -102,7 +93,63 @@ func (s *SystemService) Open() error {
 	}
 
 	s.store = kvStore
+	// Mark as open before initializing encryption below: GetSystemConfig and
+	// StoreSystemConfig both require s.isOpen to be true, so this must happen
+	// before initEncryption calls them (previously isOpen was set at the very
+	// end of Open(), which meant encryption setup always failed with "system
+	// service is not open").
 	s.isOpen = true
+
+	if err := s.initEncryption(); err != nil {
+		s.isOpen = false
+		return err
+	}
+
+	return nil
+}
+
+// initEncryption derives (or generates and persists) the encryption salt and
+// initializes the AES-GCM cipher used by encrypt/decrypt. It is a no-op when
+// encryption is disabled or no encryption key was configured.
+//
+// Callers must ensure s.isOpen is already true, since this uses
+// GetSystemConfig/StoreSystemConfig internally.
+func (s *SystemService) initEncryption() error {
+	if !s.config.EnableEncryption || s.config.EncryptionKey == "" {
+		return nil
+	}
+
+	// Try to retrieve the salt from system configuration
+	var salt []byte
+	err := s.GetSystemConfig("encryption_salt", &salt)
+	if err != nil {
+		// If we can't retrieve the salt, generate a new one
+		salt = make([]byte, 32)
+		if _, saltErr := io.ReadFull(rand.Reader, salt); saltErr != nil {
+			return fmt.Errorf("failed to generate salt: %w", saltErr)
+		}
+
+		// Store the new salt
+		if storeErr := s.StoreSystemConfig("encryption_salt", salt); storeErr != nil {
+			return fmt.Errorf("failed to store encryption salt: %w", storeErr)
+		}
+	}
+
+	// Use PBKDF2 with 100,000 iterations for key derivation
+	// This provides proper key stretching to prevent dictionary attacks
+	encryptionKey := pbkdf2.Key([]byte(s.config.EncryptionKey), salt, 100000, 32, sha256.New)
+
+	block, err := aes.NewCipher(encryptionKey)
+	if err != nil {
+		return fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	s.gcm = gcm
 	return nil
 }
 
@@ -127,6 +174,11 @@ func (s *SystemService) Close() error {
 	}
 
 	return nil
+}
+
+// IsOpen returns whether the system service is open
+func (s *SystemService) IsOpen() bool {
+	return s.isOpen
 }
 
 // encrypt encrypts data if encryption is enabled
@@ -316,18 +368,20 @@ func (s *SystemService) GetSystemConfig(key string, value interface{}) error {
 	return nil
 }
 
-// IsOpen returns whether the system service is open
-func (s *SystemService) IsOpen() bool {
-	return s.isOpen
-}
-
 // InitializeSystem implements the SystemInitializer interface
 func (s *SystemService) InitializeSystem(dataDir, systemKey, systemAPIKey string) error {
 	// Open the system service
 	if err := s.Open(); err != nil {
 		return fmt.Errorf("failed to open system service: %w", err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }() // Ignore error in cleanup
+
+	// Store the encryption salt if encryption is enabled
+	if s.config.EnableEncryption && s.config.Salt != nil {
+		if err := s.StoreSystemConfig("encryption_salt", s.config.Salt); err != nil {
+			return fmt.Errorf("failed to store encryption salt: %w", err)
+		}
+	}
 
 	// Store system API key
 	apiKey := APIKey{

@@ -5,15 +5,25 @@ import (
 	"testing"
 )
 
-func TestRelationships(t *testing.T) {
-	// Create temporary directory for test
+const relationLocatedIn = "located_in"
+
+// relationshipTestFixture holds the store and entity keys shared by TestRelationships' subtests.
+type relationshipTestFixture struct {
+	kv           *KVStore
+	characterKey string
+	placeKey     string
+	placeKey2    string
+}
+
+func newRelationshipTestFixture(t *testing.T) *relationshipTestFixture {
+	t.Helper()
+
 	tmpDir, err := os.MkdirTemp("", "freyja_relationships_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
 
-	// Create KVStore
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
 		FsyncInterval: 0, // Immediate sync for testing
@@ -24,150 +34,139 @@ func TestRelationships(t *testing.T) {
 		t.Fatalf("Failed to create KVStore: %v", err)
 	}
 
-	// Open the store
-	_, err = kv.Open()
-	if err != nil {
+	if _, err := kv.Open(); err != nil {
 		t.Fatalf("Failed to open KVStore: %v", err)
 	}
-	defer kv.Close()
+	t.Cleanup(func() { _ = kv.Close() })
 
-	// Create test entities
-	characterKey := "character:john-doe"
-	placeKey := "character:jane-smith"
-	placeKey2 := "place:winterfell"
+	fixture := &relationshipTestFixture{
+		kv:           kv,
+		characterKey: "character:john-doe",
+		placeKey:     "character:jane-smith",
+		placeKey2:    "place:winterfell",
+	}
 
-	// Store test entities
-	err = kv.Put([]byte(characterKey), []byte(`{"name": "John Doe", "type": "character"}`))
-	if err != nil {
+	if err := kv.Put([]byte(fixture.characterKey), []byte(`{"name": "John Doe", "type": "character"}`)); err != nil {
 		t.Fatalf("Failed to store character: %v", err)
 	}
-
-	err = kv.Put([]byte(placeKey), []byte(`{"name": "Jane Smith", "type": "character"}`))
-	if err != nil {
+	if err := kv.Put([]byte(fixture.placeKey), []byte(`{"name": "Jane Smith", "type": "character"}`)); err != nil {
 		t.Fatalf("Failed to store character 2: %v", err)
 	}
-
-	err = kv.Put([]byte(placeKey2), []byte(`{"name": "Winterfell", "type": "place"}`))
-	if err != nil {
+	if err := kv.Put([]byte(fixture.placeKey2), []byte(`{"name": "Winterfell", "type": "place"}`)); err != nil {
 		t.Fatalf("Failed to store place: %v", err)
 	}
 
-	// Test creating relationships
-	t.Run("PutRelationship", func(t *testing.T) {
-		// Create friendship relationship
-		err := kv.PutRelationship(characterKey, placeKey, "friend")
-		if err != nil {
-			t.Fatalf("Failed to create relationship: %v", err)
-		}
+	return fixture
+}
 
-		// Create location relationship
-		err = kv.PutRelationship(characterKey, placeKey2, "located_in")
-		if err != nil {
-			t.Fatalf("Failed to create location relationship: %v", err)
-		}
-	})
+func TestRelationships(t *testing.T) {
+	f := newRelationshipTestFixture(t)
 
-	// Test querying relationships
-	t.Run("GetRelationships", func(t *testing.T) {
-		// Query outgoing relationships for John Doe
-		query := RelationshipQuery{
-			Key:       characterKey,
-			Direction: "outgoing",
-			Limit:     10,
-		}
+	t.Run("PutRelationship", f.testPutRelationship)
+	t.Run("GetRelationships", f.testGetRelationships)
+	t.Run("GetIncomingRelationships", f.testGetIncomingRelationships)
+	t.Run("DeleteRelationship", f.testDeleteRelationship)
+	t.Run("RelationshipValidation", f.testRelationshipValidation)
+}
 
-		results, err := kv.GetRelationships(query)
-		if err != nil {
-			t.Fatalf("Failed to get relationships: %v", err)
-		}
+func (f *relationshipTestFixture) testPutRelationship(t *testing.T) {
+	if err := f.kv.PutRelationship(f.characterKey, f.placeKey, "friend"); err != nil {
+		t.Fatalf("Failed to create relationship: %v", err)
+	}
 
-		if len(results) != 2 {
-			t.Errorf("Expected 2 relationships, got %d", len(results))
-		}
+	if err := f.kv.PutRelationship(f.characterKey, f.placeKey2, relationLocatedIn); err != nil {
+		t.Fatalf("Failed to create location relationship: %v", err)
+	}
+}
 
-		// Check that we have both relationships
-		foundFriend := false
-		foundLocation := false
-		for _, result := range results {
-			if result.Relationship.Relation == "friend" && result.OtherKey == placeKey {
-				foundFriend = true
-			}
-			if result.Relationship.Relation == "located_in" && result.OtherKey == placeKey2 {
-				foundLocation = true
-			}
-		}
+func (f *relationshipTestFixture) testGetRelationships(t *testing.T) {
+	query := RelationshipQuery{
+		Key:       f.characterKey,
+		Direction: relationDirectionOutgoing,
+		Limit:     10,
+	}
 
-		if !foundFriend {
-			t.Error("Friend relationship not found")
-		}
-		if !foundLocation {
-			t.Error("Location relationship not found")
-		}
-	})
+	results, err := f.kv.GetRelationships(query)
+	if err != nil {
+		t.Fatalf("Failed to get relationships: %v", err)
+	}
 
-	// Test querying incoming relationships
-	t.Run("GetIncomingRelationships", func(t *testing.T) {
-		// Query incoming relationships for Winterfell
-		query := RelationshipQuery{
-			Key:       placeKey2,
-			Direction: "incoming",
-			Limit:     10,
-		}
+	if len(results) != 2 {
+		t.Errorf("Expected 2 relationships, got %d", len(results))
+	}
 
-		results, err := kv.GetRelationships(query)
-		if err != nil {
-			t.Fatalf("Failed to get incoming relationships: %v", err)
+	foundFriend := false
+	foundLocation := false
+	for _, result := range results {
+		if result.Relationship.Relation == "friend" && result.OtherKey == f.placeKey {
+			foundFriend = true
 		}
+		if result.Relationship.Relation == relationLocatedIn && result.OtherKey == f.placeKey2 {
+			foundLocation = true
+		}
+	}
 
-		if len(results) != 1 {
-			t.Errorf("Expected 1 incoming relationship, got %d", len(results))
-		}
+	if !foundFriend {
+		t.Error("Friend relationship not found")
+	}
+	if !foundLocation {
+		t.Error("Location relationship not found")
+	}
+}
 
-		if results[0].Relationship.Relation != "located_in" {
-			t.Errorf("Expected 'located_in' relationship, got '%s'", results[0].Relationship.Relation)
-		}
-	})
+func (f *relationshipTestFixture) testGetIncomingRelationships(t *testing.T) {
+	query := RelationshipQuery{
+		Key:       f.placeKey2,
+		Direction: relationDirectionIncoming,
+		Limit:     10,
+	}
 
-	// Test deleting relationships
-	t.Run("DeleteRelationship", func(t *testing.T) {
-		// Delete the friendship relationship
-		err := kv.DeleteRelationship(characterKey, placeKey, "friend")
-		if err != nil {
-			t.Fatalf("Failed to delete relationship: %v", err)
-		}
+	results, err := f.kv.GetRelationships(query)
+	if err != nil {
+		t.Fatalf("Failed to get incoming relationships: %v", err)
+	}
 
-		// Verify it's gone
-		query := RelationshipQuery{
-			Key:       characterKey,
-			Direction: "outgoing",
-			Relation:  "friend",
-			Limit:     10,
-		}
+	if len(results) != 1 {
+		t.Errorf("Expected 1 incoming relationship, got %d", len(results))
+	}
 
-		results, err := kv.GetRelationships(query)
-		if err != nil {
-			t.Fatalf("Failed to query after deletion: %v", err)
-		}
+	if results[0].Relationship.Relation != relationLocatedIn {
+		t.Errorf("Expected '%s' relationship, got '%s'", relationLocatedIn, results[0].Relationship.Relation)
+	}
+}
 
-		if len(results) != 0 {
-			t.Errorf("Expected 0 friend relationships after deletion, got %d", len(results))
-		}
-	})
+func (f *relationshipTestFixture) testDeleteRelationship(t *testing.T) {
+	if err := f.kv.DeleteRelationship(f.characterKey, f.placeKey, "friend"); err != nil {
+		t.Fatalf("Failed to delete relationship: %v", err)
+	}
 
-	// Test relationship validation
-	t.Run("RelationshipValidation", func(t *testing.T) {
-		// Try to create relationship with non-existent entity
-		err := kv.PutRelationship("nonexistent:key", characterKey, "test")
-		if err == nil {
-			t.Error("Expected error when creating relationship with non-existent entity")
-		}
-	})
+	query := RelationshipQuery{
+		Key:       f.characterKey,
+		Direction: relationDirectionOutgoing,
+		Relation:  "friend",
+		Limit:     10,
+	}
+
+	results, err := f.kv.GetRelationships(query)
+	if err != nil {
+		t.Fatalf("Failed to query after deletion: %v", err)
+	}
+
+	if len(results) != 0 {
+		t.Errorf("Expected 0 friend relationships after deletion, got %d", len(results))
+	}
+}
+
+func (f *relationshipTestFixture) testRelationshipValidation(t *testing.T) {
+	if err := f.kv.PutRelationship("nonexistent:key", f.characterKey, "test"); err == nil {
+		t.Error("Expected error when creating relationship with non-existent entity")
+	}
 }
 
 func TestRelationshipKeyGeneration(t *testing.T) {
 	fromKey := "character:john"
 	toKey := "place:winterfell"
-	relation := "located_in"
+	relation := relationLocatedIn
 
 	forwardKey := makeRelationshipKey("forward", fromKey, relation, toKey)
 	expectedForward := "relationship:forward:character|john:located_in:place|winterfell"

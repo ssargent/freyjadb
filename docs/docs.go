@@ -31,6 +31,7 @@ var SwaggerInfo = &swag.Spec{
 	RightDelim:       "}}",
 }
 
+//nolint:gochecknoinits // swaggo/swag generated file (DO NOT EDIT); swag always emits this registration
 func init() {
 	swag.Register(SwaggerInfo.InstanceName(), SwaggerInfo)
 }

@@ -4,6 +4,7 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -239,9 +240,8 @@ var uninstallCmd = &cobra.Command{
 		}
 
 		// Remove unit file
-		unitPath := "/etc/systemd/system/freyja.service"
-		if _, err := os.Stat(unitPath); err == nil {
-			if err := os.Remove(unitPath); err != nil {
+		if _, err := os.Stat(servicePath); err == nil {
+			if err := os.Remove(servicePath); err != nil {
 				cmd.Printf("Error removing unit file: %v\n", err)
 				os.Exit(1)
 			}
@@ -258,6 +258,7 @@ var uninstallCmd = &cobra.Command{
 	},
 }
 
+//nolint:gochecknoinits // cobra requires init() to register subcommands
 func init() {
 	rootCmd.AddCommand(serviceCmd)
 
@@ -303,8 +304,7 @@ ReadWritePaths=%s
 WantedBy=multi-user.target
 `, user, user, configPath, cfg.DataDir, filepath.Dir(configPath))
 
-	unitPath := "/etc/systemd/system/freyja.service"
-	return os.WriteFile(unitPath, []byte(unitContent), 0600)
+	return os.WriteFile(servicePath, []byte(unitContent), 0600)
 }
 
 // runSystemctlCommand runs a systemctl command
@@ -312,9 +312,13 @@ func runSystemctlCommand(args ...string) error {
 	return runCommand("systemctl", args...)
 }
 
-// runCommand runs a system command and returns its error
+// runCommand runs a system command and returns its error.
 func runCommand(command string, args ...string) error {
-	cmd := exec.Command(command, args...)
+	// G204: command is always "systemctl" or "journalctl" from internal callers in
+	// this file (runSystemctlCommand, logsCmd); args are fixed subcommands or
+	// internally constructed flags, never raw external/network input.
+	//nolint:gosec
+	cmd := exec.CommandContext(context.Background(), command, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

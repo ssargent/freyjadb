@@ -15,8 +15,8 @@ func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
 
 	assert.Equal(t, "./data", config.DataDir)
-	assert.Equal(t, 8080, config.Port)
-	assert.Equal(t, "127.0.0.1", config.Bind)
+	assert.Equal(t, DefaultPort, config.Port)
+	assert.Equal(t, DefaultBindAddress, config.Bind)
 	assert.Equal(t, "auto", config.Security.SystemKey)
 	assert.Equal(t, "auto", config.Security.SystemAPIKey)
 	assert.Equal(t, "auto", config.Security.ClientAPIKey)
@@ -55,7 +55,7 @@ func TestLoadConfig(t *testing.T) {
 	t.Run("load existing config", func(t *testing.T) {
 		tmpDir, err := os.MkdirTemp("", "freyja_config_test")
 		require.NoError(t, err)
-		defer os.RemoveAll(tmpDir)
+		defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 		configPath := filepath.Join(tmpDir, "config.yaml")
 		expectedConfig := &Config{
@@ -90,10 +90,10 @@ func TestLoadConfig(t *testing.T) {
 	t.Run("load invalid yaml", func(t *testing.T) {
 		tmpDir, err := os.MkdirTemp("", "freyja_config_test")
 		require.NoError(t, err)
-		defer os.RemoveAll(tmpDir)
+		defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 		configPath := filepath.Join(tmpDir, "invalid.yaml")
-		err = os.WriteFile(configPath, []byte("invalid: yaml: content: ["), 0644)
+		err = os.WriteFile(configPath, []byte("invalid: yaml: content: ["), 0600)
 		require.NoError(t, err)
 
 		_, err = LoadConfig(configPath)
@@ -105,7 +105,7 @@ func TestLoadConfig(t *testing.T) {
 func TestSaveConfig(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "freyja_config_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	configPath := filepath.Join(tmpDir, "config.yaml")
 	config := DefaultConfig()
@@ -127,7 +127,7 @@ func TestSaveConfig(t *testing.T) {
 func TestBootstrapConfig(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "freyja_config_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	configPath := filepath.Join(tmpDir, "config.yaml")
 	dataDir := "/custom/data/dir"
@@ -173,13 +173,13 @@ func TestGetDefaultConfigPath(t *testing.T) {
 func TestConfigExists(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "freyja_config_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	existingPath := filepath.Join(tmpDir, "exists.yaml")
 	nonExistentPath := filepath.Join(tmpDir, "does-not-exist.yaml")
 
 	// Create a file
-	err = os.WriteFile(existingPath, []byte("test"), 0644)
+	err = os.WriteFile(existingPath, []byte("test"), 0600)
 	require.NoError(t, err)
 
 	assert.True(t, ConfigExists(existingPath))
@@ -191,7 +191,7 @@ func TestConfigYAMLMarshalling(t *testing.T) {
 		DataDir: "/test/data",
 		Port:    9999,
 		Bind:    "localhost",
-		Security: Security{
+		Security: Security{ //nolint:gosec // G101: test fixture data, not a real credential
 			SystemKey:     "system-key-123",
 			SystemAPIKey:  "system-api-key-456",
 			ClientAPIKey:  "client-api-key-789",

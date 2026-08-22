@@ -56,11 +56,11 @@ func TestContentTypeHandling(t *testing.T) {
 			header   string
 			expected int
 		}{
-			{"application/json", ContentTypeJSON},
+			{ContentTypeJSONHeader, ContentTypeJSON},
 			{"application/json; charset=utf-8", ContentTypeJSON},
 			{"text/plain", ContentTypeRaw},
 			{"", ContentTypeRaw},
-			{"application/octet-stream", ContentTypeRaw},
+			{ContentTypeOctetStreamHeader, ContentTypeRaw},
 		}
 
 		for _, test := range tests {
@@ -76,8 +76,8 @@ func TestContentTypeHandling(t *testing.T) {
 			contentType int
 			expected    string
 		}{
-			{ContentTypeJSON, "application/json"},
-			{ContentTypeRaw, "application/octet-stream"},
+			{ContentTypeJSON, ContentTypeJSONHeader},
+			{ContentTypeRaw, ContentTypeOctetStreamHeader},
 		}
 
 		for _, test := range tests {
@@ -139,16 +139,16 @@ func TestHandlePut(t *testing.T) {
 	}{
 		{
 			name:           "valid JSON put",
-			key:            "testkey",
+			key:            testKeyName,
 			body:           `{"name": "test", "value": 12345}`,
-			contentType:    "application/json",
+			contentType:    ContentTypeJSONHeader,
 			expectedStatus: http.StatusOK,
-			expectedBody:   `{"success":true,"data":{"message":"Key-value pair stored successfully"}}`,
+			expectedBody:   expectedPutSuccessBody,
 			mocks: func(store *MockIKVStore) {
 				store.
 					EXPECT().
 					Put(
-						[]byte("testkey"),
+						[]byte(testKeyName),
 						helperEncodeJsonWithContentType(t, `{"name": "test", "value": 12345}`),
 					).
 					Return(nil)
@@ -156,16 +156,16 @@ func TestHandlePut(t *testing.T) {
 		},
 		{
 			name:           "valid raw put",
-			key:            "testkey",
+			key:            testKeyName,
 			body:           "raw data content",
-			contentType:    "application/octet-stream",
+			contentType:    ContentTypeOctetStreamHeader,
 			expectedStatus: http.StatusOK,
-			expectedBody:   `{"success":true,"data":{"message":"Key-value pair stored successfully"}}`,
+			expectedBody:   expectedPutSuccessBody,
 			mocks: func(store *MockIKVStore) {
 				store.
 					EXPECT().
 					Put(
-						[]byte("testkey"),
+						[]byte(testKeyName),
 						encodeDataWithContentType([]byte("raw data content"), ContentTypeRaw),
 					).
 					Return(nil)
@@ -181,16 +181,16 @@ func TestHandlePut(t *testing.T) {
 		},
 		{
 			name:           "invalid JSON",
-			key:            "testkey",
+			key:            testKeyName,
 			body:           `{"invalid": json}`,
-			contentType:    "application/json",
+			contentType:    ContentTypeJSONHeader,
 			expectedStatus: http.StatusBadRequest,
 			expectedBody:   `{"success":false,"error":"Invalid JSON in request body"}`,
 			mocks:          func(store *MockIKVStore) {},
 		},
 		{
 			name:           "store put error",
-			key:            "testkey",
+			key:            testKeyName,
 			body:           "data",
 			mockPutError:   errors.New("mock put error"), // This will cause the store to not be opened
 			expectedStatus: http.StatusInternalServerError,
@@ -198,27 +198,27 @@ func TestHandlePut(t *testing.T) {
 			mocks: func(store *MockIKVStore) {
 				store.
 					EXPECT().
-					Put([]byte("testkey"), encodeDataWithContentType([]byte("data"), ContentTypeRaw)).
+					Put([]byte(testKeyName), encodeDataWithContentType([]byte("data"), ContentTypeRaw)).
 					Return(errors.New("store is not open"))
 			},
 		},
 		{
 			name:           "empty body raw",
-			key:            "testkey",
+			key:            testKeyName,
 			body:           "",
 			expectedStatus: http.StatusOK,
-			expectedBody:   `{"success":true,"data":{"message":"Key-value pair stored successfully"}}`,
+			expectedBody:   expectedPutSuccessBody,
 			mocks: func(store *MockIKVStore) {
-				store.EXPECT().Put([]byte("testkey"), encodeDataWithContentType([]byte(""), ContentTypeRaw)).Return(nil)
+				store.EXPECT().Put([]byte(testKeyName), encodeDataWithContentType([]byte(""), ContentTypeRaw)).Return(nil)
 			},
 		},
 		{
 			name:           "url encoded key",
 			key:            "user%2F123", // URL encoded "user/123"
 			body:           `{"info": "some user data"}`,
-			contentType:    "application/json",
+			contentType:    ContentTypeJSONHeader,
 			expectedStatus: http.StatusOK,
-			expectedBody:   `{"success":true,"data":{"message":"Key-value pair stored successfully"}}`,
+			expectedBody:   expectedPutSuccessBody,
 			mocks: func(store *MockIKVStore) {
 				store.
 					EXPECT().
@@ -251,7 +251,11 @@ func TestHandlePut(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Failed to open KV store: %v", err)
 				}
-				defer kvStore.Close()
+				defer func() {
+					if err := kvStore.Close(); err != nil {
+						t.Logf("Warning: failed to close kvStore: %v", err)
+					}
+				}()
 			}
 			// For error case, don't open the store, so Put will fail
 
@@ -262,10 +266,13 @@ func TestHandlePut(t *testing.T) {
 			server := NewServer(mockStore, mockSystemService, ServerConfig{}, nil)
 
 			// Create request
-			req := httptest.NewRequest(http.MethodPut, "/kv/"+tt.key, strings.NewReader(tt.body))
+			req := httptest.NewRequestWithContext(
+				context.Background(), http.MethodPut, "/kv/"+tt.key, strings.NewReader(tt.body),
+			)
 			if tt.contentType != "" {
 				req.Header.Set("Content-Type", tt.contentType)
 			}
+			//nolint:gosec // G115: len(tt.body) is a small test fixture size, always within int32 range
 			req.Header.Set("Content-Length", string(rune(len(tt.body))))
 
 			// Set up chi router context for URL param

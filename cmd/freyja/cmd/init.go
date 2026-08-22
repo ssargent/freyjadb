@@ -41,7 +41,7 @@ Examples:
 		}
 
 		if dataDir == "" {
-			dataDir = "./data"
+			dataDir = defaultDataDir
 		}
 
 		// Generate API key if not provided
@@ -101,13 +101,14 @@ Examples:
 	},
 }
 
+//nolint:gochecknoinits // cobra requires init() to register subcommands
 func init() {
 	rootCmd.AddCommand(initCmd)
 
 	initCmd.Flags().String("system-key", "", "System encryption key for data protection (required)")
 	initCmd.Flags().String("system-api-key", "",
 		"System API key for administrative operations (optional, will be generated if not provided)")
-	initCmd.Flags().String("data-dir", "./data", "Data directory for freyja")
+	initCmd.Flags().String("data-dir", defaultDataDir, "Data directory for freyja")
 	initCmd.Flags().Bool("force", false, "Force reinitialization even if system already exists")
 	if err := initCmd.MarkFlagRequired("system-key"); err != nil {
 		panic(err)

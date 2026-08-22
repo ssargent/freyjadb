@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -19,6 +20,20 @@ import (
 
 // DefaultOrder is the fallback branching factor if a user-supplied order is too small.
 const DefaultOrder = 4
+
+// safeUint32 converts a non-negative int to uint32, returning an error instead
+// of silently truncating/overflowing when the value is out of range. Used when
+// serializing sizes and counts that are assumed small but come from int-typed
+// fields or len() results.
+func safeUint32(n int) (uint32, error) {
+	if n < 0 {
+		return 0, fmt.Errorf("value %d is negative, cannot convert to uint32", n)
+	}
+	if n > math.MaxUint32 {
+		return 0, fmt.Errorf("value %d overflows uint32", n)
+	}
+	return uint32(n), nil
+}
 
 // findChildIndex determines which child pointer to follow for a given search key in an internal node.
 // This implements the B+Tree navigation logic where:
@@ -40,8 +55,6 @@ func findChildIndex(keys [][]byte, searchKey []byte) int {
 }
 
 // BPlusTree represents a thread-safe B+Tree data structure optimized for concurrent access.
-// It provides O(log n) search, insert, and delete operations with fine-grained locking.
-//
 // Key features:
 // - Thread-safe for concurrent reads and writes
 // - Uses per-node RWMutex for fine-grained concurrency control
@@ -49,11 +62,10 @@ func findChildIndex(keys [][]byte, searchKey []byte) int {
 // - All keys are stored in leaf nodes, internal nodes contain separator keys
 // - Supports range scans via leaf node linking
 //
-// The tree maintains the following invariants:
-// - All leaves are at the same level (perfect balance)
-// - Internal nodes contain separator keys that guide navigation
-// - Each node (except root) is at least half full (order/2 keys)
-// - Root has at least 2 children if it's an internal node
+// NOTE: Current implementation uses tree-level exclusive locking during node splits,
+// which can limit concurrency under high write loads. For applications requiring
+// higher write throughput, consider implementing a lock-free B+Tree or using
+// finer-grained synchronization techniques.
 type BPlusTree struct {
 	root             *node        // Root node of the tree
 	order            int          // Maximum number of keys per node
@@ -61,6 +73,7 @@ type BPlusTree struct {
 	m                sync.RWMutex // Protects root and height modifications
 	checkpointTicker *time.Ticker // Ticker for periodic checkpoints
 	checkpointDone   chan bool    // Channel to stop checkpointing
+
 }
 
 // Height returns the current height of the B+Tree.
@@ -183,6 +196,8 @@ func (tree *BPlusTree) Search(key []byte) (*ksuid.KSUID, bool) {
 // 3. Switches to exclusive lock on the target leaf node for modification
 // 4. If the leaf overflows, acquires tree-level exclusive lock for splitting
 //
+// NOTE: Tree-level exclusive lock during splitting can limit concurrency under
+// high write loads. This is a trade-off between correctness and performance.
 // The insertion process:
 // - Finds the correct leaf node for the key
 // - Inserts the key-value pair in sorted order
@@ -249,7 +264,9 @@ func (tree *BPlusTree) Insert(key []byte, value ksuid.KSUID) {
 // 1. Acquires tree-level read lock to safely access the root
 // 2. Traverses down the tree using read locks (latch coupling)
 // 3. Switches to exclusive lock on the target leaf node for modification
-// 4. Removes the key-value pair if found
+//
+// NOTE: Like Insert, this method may acquire tree-level exclusive lock during
+// structural modifications, which can limit concurrency under high loads.
 //
 // Note: This implementation provides basic deletion without rebalancing.
 // In a production B+Tree, you would typically implement redistribution and merging
@@ -390,14 +407,16 @@ func (tree *BPlusTree) splitLeaf(leaf *node) {
 	parent.mutex.Lock()
 	defer parent.mutex.Unlock()
 
-	insertKeyInParent(tree, parent, newLeaf.keys[0], leaf, newLeaf)
+	insertKeyInParent(tree, parent, newLeaf.keys[0], newLeaf)
 }
 
-// insertKeyInParent inserts `key` and links `leftChild` & `rightChild` in the parent.
+// insertKeyInParent inserts `key` and links `rightChild` in the parent.
+// The left sibling is already linked in the parent's children slice, so only
+// the new right child needs to be inserted.
 // Must be called with the parent locked in exclusive mode.
 func insertKeyInParent(tree *BPlusTree,
 	parent *node, key []byte,
-	leftChild, rightChild *node) {
+	rightChild *node) {
 	idx := 0
 	for idx < len(parent.keys) && bytes.Compare(parent.keys[idx], key) < 0 {
 		idx++
@@ -460,35 +479,17 @@ func splitInternalNode(tree *BPlusTree, internal *node) {
 	parent.mutex.Lock()
 	defer parent.mutex.Unlock()
 
-	insertKeyInParent(tree, parent, splitKey, internal, newInternal)
+	insertKeyInParent(tree, parent, splitKey, newInternal)
 }
 
-// Save serializes the B+Tree to a binary file.
-// This method is thread-safe and can be called concurrently with other operations.
-// It acquires an exclusive lock on the tree to ensure consistency during serialization.
-func (tree *BPlusTree) Save(filename string) error {
-	tree.m.Lock()
-	defer tree.m.Unlock()
-
-	// Clean the filename to prevent path traversal
-	filename = filepath.Clean(filename)
-	file, err := os.Create(filename)
-	if err != nil {
-		return fmt.Errorf("failed to create file: %w", err)
-	}
-	defer file.Close()
-
-	// If tree is empty, just write empty metadata
-	if tree.root == nil {
-		return tree.writeEmptyTree(file)
-	}
-
-	// Collect all nodes with IDs using breadth-first traversal
+// collectNodesBFS assigns a stable ID to every node reachable from root
+// (breadth-first), for use as node references in the serialized file.
+func collectNodesBFS(root *node) (map[*node]uint32, []*node) {
 	nodeMap := make(map[*node]uint32)
 	var nodes []*node
 	id := uint32(0)
 
-	queue := []*node{tree.root}
+	queue := []*node{root}
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
@@ -507,24 +508,73 @@ func (tree *BPlusTree) Save(filename string) error {
 		}
 	}
 
-	// Write metadata
-	if err := binary.Write(file, binary.LittleEndian, uint32(tree.order)); err != nil {
+	return nodeMap, nodes
+}
+
+// writeTreeMetadata writes the order/height/rootID/nodeCount header block
+// shared by Save and writeEmptyTree.
+func writeTreeMetadata(file *os.File, order, height int, rootID uint32, nodeCount int) error {
+	orderU32, err := safeUint32(order)
+	if err != nil {
+		return fmt.Errorf("invalid tree order: %w", err)
+	}
+	if err = binary.Write(file, binary.LittleEndian, orderU32); err != nil {
 		return fmt.Errorf("failed to write order: %w", err)
 	}
-	if err := binary.Write(file, binary.LittleEndian, uint32(tree.height)); err != nil {
+
+	heightU32, err := safeUint32(height)
+	if err != nil {
+		return fmt.Errorf("invalid tree height: %w", err)
+	}
+	if err = binary.Write(file, binary.LittleEndian, heightU32); err != nil {
 		return fmt.Errorf("failed to write height: %w", err)
 	}
-	rootID := nodeMap[tree.root]
-	if err := binary.Write(file, binary.LittleEndian, rootID); err != nil {
+
+	if err = binary.Write(file, binary.LittleEndian, rootID); err != nil {
 		return fmt.Errorf("failed to write root ID: %w", err)
 	}
-	if err := binary.Write(file, binary.LittleEndian, uint32(len(nodes))); err != nil {
+
+	nodeCountU32, err := safeUint32(nodeCount)
+	if err != nil {
+		return fmt.Errorf("invalid node count: %w", err)
+	}
+	if err = binary.Write(file, binary.LittleEndian, nodeCountU32); err != nil {
 		return fmt.Errorf("failed to write node count: %w", err)
 	}
 
+	return nil
+}
+
+// Save serializes the B+Tree to a binary file.
+// This method is thread-safe and can be called concurrently with other operations.
+// It acquires an exclusive lock on the tree to ensure consistency during serialization.
+func (tree *BPlusTree) Save(filename string) error {
+	tree.m.Lock()
+	defer tree.m.Unlock()
+
+	// Clean the filename to prevent path traversal
+	filename = filepath.Clean(filename)
+	file, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer func() { _ = file.Close() }() // Ignore error in cleanup
+
+	// If tree is empty, just write empty metadata
+	if tree.root == nil {
+		return tree.writeEmptyTree(file)
+	}
+
+	// Collect all nodes with IDs using breadth-first traversal
+	nodeMap, nodes := collectNodesBFS(tree.root)
+
+	if err = writeTreeMetadata(file, tree.order, tree.height, nodeMap[tree.root], len(nodes)); err != nil {
+		return err
+	}
+
 	// Write each node
-	for _, node := range nodes {
-		if err := tree.writeNode(file, node, nodeMap); err != nil {
+	for _, n := range nodes {
+		if err = tree.writeNode(file, n, nodeMap); err != nil {
 			return fmt.Errorf("failed to write node: %w", err)
 		}
 	}
@@ -534,23 +584,30 @@ func (tree *BPlusTree) Save(filename string) error {
 
 // writeEmptyTree writes metadata for an empty tree
 func (tree *BPlusTree) writeEmptyTree(file *os.File) error {
-	if err := binary.Write(file, binary.LittleEndian, uint32(tree.order)); err != nil {
-		return err
-	}
-	if err := binary.Write(file, binary.LittleEndian, uint32(tree.height)); err != nil {
-		return err
-	}
-	rootID := uint32(0) // No root
-	if err := binary.Write(file, binary.LittleEndian, rootID); err != nil {
-		return err
-	}
-	nodeCount := uint32(0)
-	return binary.Write(file, binary.LittleEndian, nodeCount)
+	return writeTreeMetadata(file, tree.order, tree.height, 0, 0)
 }
 
 // writeNode serializes a single node to the file
 func (tree *BPlusTree) writeNode(file *os.File, n *node, nodeMap map[*node]uint32) error {
-	// Write isLeaf
+	if err := writeNodeKeys(file, n); err != nil {
+		return err
+	}
+
+	if n.isLeaf {
+		if err := writeLeafValues(file, n, nodeMap); err != nil {
+			return err
+		}
+	} else {
+		if err := writeInternalChildren(file, n, nodeMap); err != nil {
+			return err
+		}
+	}
+
+	return writeNodeParent(file, n, nodeMap)
+}
+
+// writeNodeKeys writes the isLeaf flag followed by the node's keys.
+func writeNodeKeys(file *os.File, n *node) error {
 	isLeaf := uint8(0)
 	if n.isLeaf {
 		isLeaf = 1
@@ -559,14 +616,20 @@ func (tree *BPlusTree) writeNode(file *os.File, n *node, nodeMap map[*node]uint3
 		return err
 	}
 
-	// Write number of keys
-	if err := binary.Write(file, binary.LittleEndian, uint32(len(n.keys))); err != nil {
+	keyCount, err := safeUint32(len(n.keys))
+	if err != nil {
+		return fmt.Errorf("invalid key count: %w", err)
+	}
+	if err := binary.Write(file, binary.LittleEndian, keyCount); err != nil {
 		return err
 	}
 
-	// Write keys
 	for _, key := range n.keys {
-		if err := binary.Write(file, binary.LittleEndian, uint32(len(key))); err != nil {
+		keyLen, err := safeUint32(len(key))
+		if err != nil {
+			return fmt.Errorf("invalid key length: %w", err)
+		}
+		if err := binary.Write(file, binary.LittleEndian, keyLen); err != nil {
 			return err
 		}
 		if _, err := file.Write(key); err != nil {
@@ -574,51 +637,60 @@ func (tree *BPlusTree) writeNode(file *os.File, n *node, nodeMap map[*node]uint3
 		}
 	}
 
-	if n.isLeaf {
-		// Write values
-		for _, value := range n.values {
-			if value == nil {
-				// Write zero length for nil
-				if err := binary.Write(file, binary.LittleEndian, uint32(0)); err != nil {
-					return err
-				}
-			} else {
-				ksuidBytes := value.Bytes()
-				if err := binary.Write(file, binary.LittleEndian, uint32(len(ksuidBytes))); err != nil {
-					return err
-				}
-				if _, err := file.Write(ksuidBytes); err != nil {
-					return err
-				}
-			}
-		}
+	return nil
+}
 
-		// Write next ID
-		nextID := uint32(0)
-		if n.next != nil {
-			if id, exists := nodeMap[n.next]; exists {
-				nextID = id
-			}
-		}
-		if err := binary.Write(file, binary.LittleEndian, nextID); err != nil {
-			return err
-		}
-	} else {
-		// Write children IDs
-		for _, child := range n.children {
-			childID := uint32(0)
-			if child != nil {
-				if id, exists := nodeMap[child]; exists {
-					childID = id
-				}
-			}
-			if err := binary.Write(file, binary.LittleEndian, childID); err != nil {
+// writeLeafValues writes a leaf node's values and its next-leaf pointer.
+func writeLeafValues(file *os.File, n *node, nodeMap map[*node]uint32) error {
+	for _, value := range n.values {
+		if value == nil {
+			// Write zero length for nil
+			if err := binary.Write(file, binary.LittleEndian, uint32(0)); err != nil {
 				return err
 			}
+			continue
+		}
+
+		ksuidBytes := value.Bytes()
+		valueLen, err := safeUint32(len(ksuidBytes))
+		if err != nil {
+			return fmt.Errorf("invalid value length: %w", err)
+		}
+		if err := binary.Write(file, binary.LittleEndian, valueLen); err != nil {
+			return err
+		}
+		if _, err := file.Write(ksuidBytes); err != nil {
+			return err
 		}
 	}
 
-	// Write parent ID
+	nextID := uint32(0)
+	if n.next != nil {
+		if id, exists := nodeMap[n.next]; exists {
+			nextID = id
+		}
+	}
+	return binary.Write(file, binary.LittleEndian, nextID)
+}
+
+// writeInternalChildren writes an internal node's child pointers as node IDs.
+func writeInternalChildren(file *os.File, n *node, nodeMap map[*node]uint32) error {
+	for _, child := range n.children {
+		childID := uint32(0)
+		if child != nil {
+			if id, exists := nodeMap[child]; exists {
+				childID = id
+			}
+		}
+		if err := binary.Write(file, binary.LittleEndian, childID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeNodeParent writes the node's parent pointer as a node ID.
+func writeNodeParent(file *os.File, n *node, nodeMap map[*node]uint32) error {
 	parentID := uint32(0)
 	if n.parent != nil {
 		if id, exists := nodeMap[n.parent]; exists {
@@ -628,69 +700,64 @@ func (tree *BPlusTree) writeNode(file *os.File, n *node, nodeMap map[*node]uint3
 	return binary.Write(file, binary.LittleEndian, parentID)
 }
 
-// Load deserializes a B+Tree from a binary file.
-// Returns a new BPlusTree instance loaded from the file.
-func LoadBPlusTree(filename string) (*BPlusTree, error) {
-	// Clean the filename to prevent path traversal
-	filename = filepath.Clean(filename)
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %w", err)
-	}
-	defer file.Close()
+// treeHeader holds the metadata block at the start of a serialized B+Tree file.
+type treeHeader struct {
+	order     uint32
+	height    uint32
+	rootID    uint32
+	nodeCount uint32
+}
 
-	// Read metadata
-	var order uint32
-	if err := binary.Read(file, binary.LittleEndian, &order); err != nil {
-		return nil, fmt.Errorf("failed to read order: %w", err)
+// readTreeHeader reads the fixed metadata block written by Save/writeEmptyTree.
+func readTreeHeader(file *os.File) (treeHeader, error) {
+	var h treeHeader
+	if err := binary.Read(file, binary.LittleEndian, &h.order); err != nil {
+		return treeHeader{}, fmt.Errorf("failed to read order: %w", err)
 	}
-	var height uint32
-	if err := binary.Read(file, binary.LittleEndian, &height); err != nil {
-		return nil, fmt.Errorf("failed to read height: %w", err)
+	if err := binary.Read(file, binary.LittleEndian, &h.height); err != nil {
+		return treeHeader{}, fmt.Errorf("failed to read height: %w", err)
 	}
-	var rootID uint32
-	if err := binary.Read(file, binary.LittleEndian, &rootID); err != nil {
-		return nil, fmt.Errorf("failed to read root ID: %w", err)
+	if err := binary.Read(file, binary.LittleEndian, &h.rootID); err != nil {
+		return treeHeader{}, fmt.Errorf("failed to read root ID: %w", err)
 	}
-	var nodeCount uint32
-	if err := binary.Read(file, binary.LittleEndian, &nodeCount); err != nil {
-		return nil, fmt.Errorf("failed to read node count: %w", err)
+	if err := binary.Read(file, binary.LittleEndian, &h.nodeCount); err != nil {
+		return treeHeader{}, fmt.Errorf("failed to read node count: %w", err)
 	}
+	return h, nil
+}
 
-	// If no nodes, return empty tree
-	if nodeCount == 0 {
-		return NewBPlusTree(int(order)), nil
-	}
-
-	// Read temp nodes
+// readAllTempNodes reads nodeCount serialized nodes from the file into their
+// intermediate (pointer-less) representation.
+func readAllTempNodes(file *os.File, nodeCount uint32) ([]*tempNode, error) {
 	tempNodes := make([]*tempNode, nodeCount)
-	idToTempNode := make(map[uint32]*tempNode)
-
 	for i := uint32(0); i < nodeCount; i++ {
 		temp, err := readTempNode(file)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read node %d: %w", i, err)
 		}
 		tempNodes[i] = temp
-		idToTempNode[i] = temp
 	}
+	return tempNodes, nil
+}
 
-	// Convert temp nodes to real nodes and reconstruct pointers
-	nodes := make([]*node, nodeCount)
-	idToNode := make(map[uint32]*node)
-
+// buildNodesFromTemp allocates the real *node objects (without cross-node
+// pointers wired up yet) from their temp representations.
+func buildNodesFromTemp(tempNodes []*tempNode) map[uint32]*node {
+	idToNode := make(map[uint32]*node, len(tempNodes))
 	for i, temp := range tempNodes {
-		n := &node{
+		idToNode[uint32(i)] = &node{
 			isLeaf:   temp.isLeaf,
 			keys:     temp.keys,
 			children: make([]*node, len(temp.childrenIDs)),
 			values:   temp.values,
 		}
-		nodes[i] = n
-		idToNode[uint32(i)] = n
 	}
+	return idToNode
+}
 
-	// Reconstruct pointers
+// linkNodePointers wires up next/children/parent pointers between the real
+// nodes based on the IDs recorded on each temp node.
+func linkNodePointers(tempNodes []*tempNode, idToNode map[uint32]*node) {
 	for _, temp := range tempNodes {
 		n := idToNode[temp.id]
 		if temp.isLeaf {
@@ -718,11 +785,42 @@ func LoadBPlusTree(filename string) (*BPlusTree, error) {
 			}
 		}
 	}
+}
+
+// Load deserializes a B+Tree from a binary file.
+// Returns a new BPlusTree instance loaded from the file.
+func LoadBPlusTree(filename string) (*BPlusTree, error) {
+	// Clean the filename to prevent path traversal
+	filename = filepath.Clean(filename)
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer func() { _ = file.Close() }() // Ignore error in cleanup
+
+	header, err := readTreeHeader(file)
+	if err != nil {
+		return nil, err
+	}
+
+	// If no nodes, return empty tree
+	if header.nodeCount == 0 {
+		return NewBPlusTree(int(header.order)), nil
+	}
+
+	tempNodes, err := readAllTempNodes(file, header.nodeCount)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert temp nodes to real nodes and reconstruct pointers
+	idToNode := buildNodesFromTemp(tempNodes)
+	linkNodePointers(tempNodes, idToNode)
 
 	tree := &BPlusTree{
-		root:   idToNode[rootID],
-		order:  int(order),
-		height: int(height),
+		root:   idToNode[header.rootID],
+		order:  int(header.order),
+		height: int(header.height),
 	}
 
 	return tree, nil
@@ -739,72 +837,98 @@ type tempNode struct {
 	nextID      uint32
 }
 
-// readTempNode deserializes a single temp node from the file
-func readTempNode(file *os.File) (*tempNode, error) {
-	var isLeaf uint8
-	if err := binary.Read(file, binary.LittleEndian, &isLeaf); err != nil {
-		return nil, err
+// readTempNodeKeys reads the leaf/internal flag, key count, and keys for a
+// serialized node.
+func readTempNodeKeys(file *os.File) (isLeaf bool, keys [][]byte, keyCount uint32, err error) {
+	var isLeafByte uint8
+	if err := binary.Read(file, binary.LittleEndian, &isLeafByte); err != nil {
+		return false, nil, 0, err
 	}
 
-	var keyCount uint32
 	if err := binary.Read(file, binary.LittleEndian, &keyCount); err != nil {
-		return nil, err
+		return false, nil, 0, err
 	}
 
-	keys := make([][]byte, keyCount)
+	keys = make([][]byte, keyCount)
 	for i := uint32(0); i < keyCount; i++ {
 		var keyLen uint32
 		if err := binary.Read(file, binary.LittleEndian, &keyLen); err != nil {
-			return nil, err
+			return false, nil, 0, err
 		}
 		key := make([]byte, keyLen)
 		if _, err := io.ReadFull(file, key); err != nil {
-			return nil, err
+			return false, nil, 0, err
 		}
 		keys[i] = key
 	}
 
+	return isLeafByte == 1, keys, keyCount, nil
+}
+
+// readTempLeafData reads a leaf node's values and next-leaf ID.
+func readTempLeafData(file *os.File, keyCount uint32) (values []*ksuid.KSUID, nextID uint32, err error) {
+	values = make([]*ksuid.KSUID, keyCount)
+	for i := uint32(0); i < keyCount; i++ {
+		var valueLen uint32
+		if err := binary.Read(file, binary.LittleEndian, &valueLen); err != nil {
+			return nil, 0, err
+		}
+		if valueLen == 0 {
+			values[i] = nil
+			continue
+		}
+		valueBytes := make([]byte, valueLen)
+		if _, err := io.ReadFull(file, valueBytes); err != nil {
+			return nil, 0, err
+		}
+		id, err := ksuid.FromBytes(valueBytes)
+		if err != nil {
+			return nil, 0, fmt.Errorf("invalid KSUID bytes: %w", err)
+		}
+		values[i] = &id
+	}
+
+	if err := binary.Read(file, binary.LittleEndian, &nextID); err != nil {
+		return nil, 0, err
+	}
+	return values, nextID, nil
+}
+
+// readTempInternalChildren reads an internal node's child IDs.
+func readTempInternalChildren(file *os.File, keyCount uint32) ([]uint32, error) {
+	childrenCount := keyCount + 1
+	childrenIDs := make([]uint32, childrenCount)
+	for i := uint32(0); i < childrenCount; i++ {
+		if err := binary.Read(file, binary.LittleEndian, &childrenIDs[i]); err != nil {
+			return nil, err
+		}
+	}
+	return childrenIDs, nil
+}
+
+// readTempNode deserializes a single temp node from the file
+func readTempNode(file *os.File) (*tempNode, error) {
+	isLeaf, keys, keyCount, err := readTempNodeKeys(file)
+	if err != nil {
+		return nil, err
+	}
+
 	temp := &tempNode{
-		isLeaf: isLeaf == 1,
+		isLeaf: isLeaf,
 		keys:   keys,
 	}
 
 	if temp.isLeaf {
-		values := make([]*ksuid.KSUID, keyCount)
-		for i := uint32(0); i < keyCount; i++ {
-			var valueLen uint32
-			if err := binary.Read(file, binary.LittleEndian, &valueLen); err != nil {
-				return nil, err
-			}
-			if valueLen == 0 {
-				values[i] = nil
-			} else {
-				valueBytes := make([]byte, valueLen)
-				if _, err := io.ReadFull(file, valueBytes); err != nil {
-					return nil, err
-				}
-				ksuid, err := ksuid.FromBytes(valueBytes)
-				if err != nil {
-					return nil, fmt.Errorf("invalid KSUID bytes: %w", err)
-				}
-				values[i] = &ksuid
-			}
-		}
-		temp.values = values
-
-		// Read next ID
-		var nextID uint32
-		if err := binary.Read(file, binary.LittleEndian, &nextID); err != nil {
+		values, nextID, err := readTempLeafData(file, keyCount)
+		if err != nil {
 			return nil, err
 		}
+		temp.values = values
 		temp.nextID = nextID
 	} else {
-		childrenCount := keyCount + 1
-		childrenIDs := make([]uint32, childrenCount)
-		for i := uint32(0); i < childrenCount; i++ {
-			if err := binary.Read(file, binary.LittleEndian, &childrenIDs[i]); err != nil {
-				return nil, err
-			}
+		childrenIDs, err := readTempInternalChildren(file, keyCount)
+		if err != nil {
+			return nil, err
 		}
 		temp.childrenIDs = childrenIDs
 	}
@@ -830,7 +954,10 @@ func (tree *BPlusTree) StartCheckpoint(filename string, intervalSeconds int) {
 		for {
 			select {
 			case <-tree.checkpointTicker.C:
-				tree.Save(filename)
+				if err := tree.Save(filename); err != nil {
+					// Log error but continue checkpointing
+					fmt.Printf("Warning: checkpoint save failed: %v\n", err)
+				}
 			case <-tree.checkpointDone:
 				return
 			}

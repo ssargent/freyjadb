@@ -13,10 +13,10 @@ func TestInitCommand(t *testing.T) {
 	// Create temporary directory for test
 	tmpDir, err := os.MkdirTemp("", "freyja_init_test")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	dataDir := filepath.Join(tmpDir, "data")
-	systemKey := "test-system-key-1234567890123456" // 32 bytes for AES-256
+	systemKey := testSystemKey
 
 	t.Run("Successful initialization", func(t *testing.T) {
 		// Test the system initialization using dependency injection
@@ -86,7 +86,7 @@ func TestLoadExistingSystemKey(t *testing.T) {
 	// Create temporary directory for test
 	tmpDir, err := os.MkdirTemp("", "freyja_load_test")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	dataDir := filepath.Join(tmpDir, "data")
 	systemKey := "existing-system-key-1234567890123456" // 32 bytes for AES-256

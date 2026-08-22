@@ -34,7 +34,7 @@ func setupSystemTestServer(t *testing.T) (*Server, func()) {
 	// Create system service
 	systemConfig := SystemConfig{
 		DataDir:          tmpDir,
-		EncryptionKey:    "12345678901234567890123456789012",
+		EncryptionKey:    testEncryptionKey,
 		EnableEncryption: true,
 	}
 
@@ -51,7 +51,7 @@ func setupSystemTestServer(t *testing.T) (*Server, func()) {
 		SystemKey:           "test-system-key",
 		DataDir:             tmpDir,
 		SystemDataDir:       tmpDir,
-		SystemEncryptionKey: "12345678901234567890123456789012",
+		SystemEncryptionKey: testEncryptionKey,
 		EnableEncryption:    true,
 	}
 
@@ -60,9 +60,9 @@ func setupSystemTestServer(t *testing.T) (*Server, func()) {
 	// Return cleanup function
 	cleanup := func() {
 		// Close in reverse order to avoid file handle issues
-		kvStore.Close()
-		systemService.Close()
-		os.RemoveAll(tmpDir)
+		_ = kvStore.Close()       // Ignore error in cleanup
+		_ = systemService.Close() // Ignore error in cleanup
+		_ = os.RemoveAll(tmpDir)  // Ignore error in cleanup
 	}
 
 	return server, cleanup
@@ -76,13 +76,13 @@ func TestSystemAPIKeyHandlers(t *testing.T) {
 		apiKeyData := APIKey{
 			ID:          "test-api-key",
 			Key:         "test-key-value",
-			Description: "Test API key",
+			Description: testAPIKeyDescription,
 			IsActive:    true,
 		}
 
 		body, _ := json.Marshal(apiKeyData)
-		req := httptest.NewRequest("POST", "/system/api-keys", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
+		req := httptest.NewRequestWithContext(context.Background(), "POST", "/system/api-keys", bytes.NewReader(body))
+		req.Header.Set("Content-Type", ContentTypeJSONHeader)
 		req.Header.Set("X-API-Key", "test-system-key")
 
 		w := httptest.NewRecorder()
@@ -100,7 +100,7 @@ func TestSystemAPIKeyHandlers(t *testing.T) {
 	})
 
 	t.Run("List API keys", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/system/api-keys", nil)
+		req := httptest.NewRequestWithContext(context.Background(), "GET", "/system/api-keys", nil)
 		req.Header.Set("X-API-Key", "test-system-key")
 
 		w := httptest.NewRecorder()
@@ -117,29 +117,29 @@ func TestSystemAPIKeyHandlers(t *testing.T) {
 	})
 
 	t.Run("Get specific API key", func(t *testing.T) {
-		server, cleanup := setupSystemTestServer(t)
-		defer cleanup()
+		keyServer, keyCleanup := setupSystemTestServer(t)
+		defer keyCleanup()
 
 		// First create the API key
 		apiKeyData := APIKey{
 			ID:          "test-api-key",
 			Key:         "test-key-value",
-			Description: "Test API key",
+			Description: testAPIKeyDescription,
 			IsActive:    true,
 		}
 
 		body, _ := json.Marshal(apiKeyData)
-		req := httptest.NewRequest("POST", "/system/api-keys", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
+		req := httptest.NewRequestWithContext(context.Background(), "POST", "/system/api-keys", bytes.NewReader(body))
+		req.Header.Set("Content-Type", ContentTypeJSONHeader)
 		req.Header.Set("X-API-Key", "test-system-key")
 
 		w := httptest.NewRecorder()
-		server.handleCreateAPIKey(w, req)
+		keyServer.handleCreateAPIKey(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		// Now get the API key
-		req2 := httptest.NewRequest("GET", "/system/api-keys/test-api-key", nil)
+		req2 := httptest.NewRequestWithContext(context.Background(), "GET", "/system/api-keys/test-api-key", nil)
 		req2.Header.Set("X-API-Key", "test-system-key")
 
 		rctx := chi.NewRouteContext()
@@ -147,7 +147,7 @@ func TestSystemAPIKeyHandlers(t *testing.T) {
 		req2 = req2.WithContext(context.WithValue(req2.Context(), chi.RouteCtxKey, rctx))
 
 		w2 := httptest.NewRecorder()
-		server.handleGetAPIKey(w2, req2)
+		keyServer.handleGetAPIKey(w2, req2)
 
 		assert.Equal(t, http.StatusOK, w2.Code)
 
@@ -165,7 +165,7 @@ func TestSystemAPIKeyHandlers(t *testing.T) {
 	})
 
 	t.Run("Delete API key", func(t *testing.T) {
-		req := httptest.NewRequest("DELETE", "/system/api-keys/test-api-key", nil)
+		req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/system/api-keys/test-api-key", nil)
 		req.Header.Set("X-API-Key", "test-system-key")
 
 		rctx := chi.NewRouteContext()
@@ -186,7 +186,7 @@ func TestSystemAPIKeyHandlers(t *testing.T) {
 	})
 
 	t.Run("Get non-existent API key", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/system/api-keys/non-existent", nil)
+		req := httptest.NewRequestWithContext(context.Background(), "GET", "/system/api-keys/non-existent", nil)
 		req.Header.Set("X-API-Key", "test-system-key")
 
 		rctx := chi.NewRouteContext()
@@ -211,8 +211,8 @@ func TestSystemConfigHandlers(t *testing.T) {
 		}
 
 		body, _ := json.Marshal(configData)
-		req := httptest.NewRequest("PUT", "/system/config/database", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
+		req := httptest.NewRequestWithContext(context.Background(), "PUT", "/system/config/database", bytes.NewReader(body))
+		req.Header.Set("Content-Type", ContentTypeJSONHeader)
 		req.Header.Set("X-API-Key", "test-system-key")
 
 		rctx := chi.NewRouteContext()
@@ -233,7 +233,7 @@ func TestSystemConfigHandlers(t *testing.T) {
 	})
 
 	t.Run("Get system config", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/system/config/database", nil)
+		req := httptest.NewRequestWithContext(context.Background(), "GET", "/system/config/database", nil)
 		req.Header.Set("X-API-Key", "test-system-key")
 
 		rctx := chi.NewRouteContext()
@@ -255,7 +255,7 @@ func TestSystemConfigHandlers(t *testing.T) {
 	})
 
 	t.Run("Get non-existent config", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/system/config/non-existent", nil)
+		req := httptest.NewRequestWithContext(context.Background(), "GET", "/system/config/non-existent", nil)
 		req.Header.Set("X-API-Key", "test-system-key")
 
 		rctx := chi.NewRouteContext()
@@ -274,8 +274,10 @@ func TestSystemAPIKeyValidation(t *testing.T) {
 	defer cleanup()
 
 	t.Run("Invalid JSON in create request", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/system/api-keys", bytes.NewReader([]byte("invalid json")))
-		req.Header.Set("Content-Type", "application/json")
+		req := httptest.NewRequestWithContext(
+			context.Background(), "POST", "/system/api-keys", bytes.NewReader([]byte("invalid json")),
+		)
+		req.Header.Set("Content-Type", ContentTypeJSONHeader)
 		req.Header.Set("X-API-Key", "test-system-key")
 
 		w := httptest.NewRecorder()
@@ -290,8 +292,8 @@ func TestSystemAPIKeyValidation(t *testing.T) {
 		}
 
 		body, _ := json.Marshal(apiKeyData)
-		req := httptest.NewRequest("POST", "/system/api-keys", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
+		req := httptest.NewRequestWithContext(context.Background(), "POST", "/system/api-keys", bytes.NewReader(body))
+		req.Header.Set("Content-Type", ContentTypeJSONHeader)
 		req.Header.Set("X-API-Key", "test-system-key")
 
 		w := httptest.NewRecorder()
@@ -301,8 +303,10 @@ func TestSystemAPIKeyValidation(t *testing.T) {
 	})
 
 	t.Run("Invalid JSON in set config", func(t *testing.T) {
-		req := httptest.NewRequest("PUT", "/system/config/test", bytes.NewReader([]byte("invalid json")))
-		req.Header.Set("Content-Type", "application/json")
+		req := httptest.NewRequestWithContext(
+			context.Background(), "PUT", "/system/config/test", bytes.NewReader([]byte("invalid json")),
+		)
+		req.Header.Set("Content-Type", ContentTypeJSONHeader)
 		req.Header.Set("X-API-Key", "test-system-key")
 
 		rctx := chi.NewRouteContext()

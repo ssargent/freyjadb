@@ -80,7 +80,7 @@ Examples:
 		if port != 8080 { // Only override if explicitly set
 			cfg.Port = port
 		}
-		if bind != "127.0.0.1" { // Only override if explicitly set
+		if bind != config.DefaultBindAddress { // Only override if explicitly set
 			cfg.Bind = bind
 		}
 
@@ -103,7 +103,7 @@ Examples:
 		serverStarter := serverFactory.CreateServerStarter()
 
 		// Get store from context (created by root command)
-		kv, ok := cmd.Context().Value("store").(*store.KVStore)
+		kv, ok := cmd.Context().Value(storeContextKey).(*store.KVStore)
 		if !ok {
 			cmd.Printf("Error: store not found in context\n")
 			os.Exit(1)
@@ -117,12 +117,13 @@ Examples:
 	},
 }
 
+//nolint:gochecknoinits // cobra requires init() to register subcommands
 func init() {
 	rootCmd.AddCommand(upCmd)
 
-	upCmd.Flags().StringP("data-dir", "d", "./data", "Data directory for the store")
+	upCmd.Flags().StringP("data-dir", "d", defaultDataDir, "Data directory for the store")
 	upCmd.Flags().IntP("port", "p", 8080, "Port to listen on")
-	upCmd.Flags().String("bind", "127.0.0.1", "Address to bind server to")
+	upCmd.Flags().String("bind", config.DefaultBindAddress, "Address to bind server to")
 	upCmd.Flags().String("config", "", "Path to config file (default: OS-specific location)")
 	upCmd.Flags().Bool("non-interactive", false, "Skip prompts and use defaults")
 	upCmd.Flags().Bool("print-keys", false, "Print generated API keys to console")
@@ -145,7 +146,9 @@ func initializeSystemIfNeeded(cfg *config.Config) error {
 
 	// Initialize system store
 	factory := container.GetSystemServiceFactory()
-	systemService, err := factory.CreateSystemService(systemDataDir, cfg.Security.SystemKey, true, cfg.Security.MaxRecordSize)
+	systemService, err := factory.CreateSystemService(
+		systemDataDir, cfg.Security.SystemKey, true, cfg.Security.MaxRecordSize,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to create system service: %w", err)
 	}

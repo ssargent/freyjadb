@@ -20,7 +20,7 @@ Example:
 		key := []byte(args[0])
 
 		// Get store from context
-		kv, ok := cmd.Context().Value("store").(*store.KVStore)
+		kv, ok := cmd.Context().Value(storeContextKey).(*store.KVStore)
 		if !ok {
 			fmt.Printf("Error: store not found in context\n")
 			return

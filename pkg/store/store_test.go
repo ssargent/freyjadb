@@ -15,7 +15,7 @@ import (
 func TestNewStore(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "store_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	store, err := NewStore(tmpDir)
 	require.NoError(t, err)
@@ -36,11 +36,11 @@ func TestNewStore(t *testing.T) {
 func TestStore_PutAndGet(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "store_put_get_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	store, err := NewStore(tmpDir)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	// Test Put
 	err = store.Put([]byte("test_key"), []byte("test_value"))
@@ -60,11 +60,11 @@ func TestStore_PutAndGet(t *testing.T) {
 func TestStore_Explain(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "store_explain_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	store, err := NewStore(tmpDir)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ctx := context.Background()
 
@@ -98,11 +98,11 @@ func TestStore_Explain(t *testing.T) {
 func TestStore_ExplainWithSamples(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "store_explain_samples_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	store, err := NewStore(tmpDir)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ctx := context.Background()
 
@@ -125,11 +125,11 @@ func TestStore_ExplainWithSamples(t *testing.T) {
 func TestStore_ExplainWithMetrics(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "store_explain_metrics_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	store, err := NewStore(tmpDir)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ctx := context.Background()
 
@@ -148,11 +148,11 @@ func TestStore_ExplainWithMetrics(t *testing.T) {
 func TestStore_ExplainWithPKFilter(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "store_explain_pk_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	store, err := NewStore(tmpDir)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ctx := context.Background()
 
@@ -177,11 +177,11 @@ func TestStore_ExplainWithPKFilter(t *testing.T) {
 func TestStore_CompactionDetection(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "store_compaction_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	store, err := NewStore(tmpDir)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ctx := context.Background()
 
@@ -198,11 +198,11 @@ func TestStore_CompactionDetection(t *testing.T) {
 func TestStoreImpl_MultiplePuts(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "store_multiple_puts_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	store, err := NewStore(tmpDir)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	// Put multiple keys
 	keys := [][]byte{
@@ -227,11 +227,11 @@ func TestStoreImpl_MultiplePuts(t *testing.T) {
 func TestStoreImpl_KeyTracking(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "store_key_tracking_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	store, err := NewStore(tmpDir)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	// Initial state should have keys from stub data
 	ctx := context.Background()
@@ -259,11 +259,11 @@ func TestStore_ErrorHandling(t *testing.T) {
 func BenchmarkStore_Put(b *testing.B) {
 	tmpDir, err := os.MkdirTemp("", "store_bench_put")
 	require.NoError(b, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	store, err := NewStore(tmpDir)
 	require.NoError(b, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -278,40 +278,46 @@ func BenchmarkStore_Put(b *testing.B) {
 func BenchmarkStore_Get(b *testing.B) {
 	tmpDir, err := os.MkdirTemp("", "store_bench_get")
 	require.NoError(b, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	store, err := NewStore(tmpDir)
 	require.NoError(b, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	// Pre-populate with data
 	for i := 0; i < 1000; i++ {
 		key := []byte(fmt.Sprintf("bench_key_%d", i))
 		value := []byte(fmt.Sprintf("bench_value_%d", i))
-		store.Put(key, value)
+		if err := store.Put(key, value); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		key := []byte(fmt.Sprintf("bench_key_%d", i%1000))
-		store.Get(key)
+		if _, err := store.Get(key); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
 func BenchmarkStore_Explain(b *testing.B) {
 	tmpDir, err := os.MkdirTemp("", "store_bench_explain")
 	require.NoError(b, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	store, err := NewStore(tmpDir)
 	require.NoError(b, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ctx := context.Background()
 	opts := ExplainOptions{}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		store.Explain(ctx, opts)
+		if _, err := store.Explain(ctx, opts); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

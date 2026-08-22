@@ -36,9 +36,9 @@ func (qe *SimpleQueryEngine) ExecuteQuery(ctx context.Context, partitionKey stri
 	// TODO: Add support for range queries and other operators
 	switch query.Operator {
 	case "=":
-		return qe.executeEqualityQuery(ctx, idx, query.Value, extractor)
+		return qe.executeEqualityQuery(idx, query.Value)
 	case ">", ">=", "<", "<=":
-		return qe.executeRangeQuery(ctx, idx, query, extractor)
+		return qe.executeRangeQuery(idx, query)
 	default:
 		return nil, fmt.Errorf("unsupported operator: %s", query.Operator)
 	}
@@ -60,12 +60,12 @@ func (qe *SimpleQueryEngine) ExecuteRangeQuery(ctx context.Context, partitionKey
 	}
 
 	idx := qe.indexManager.GetOrCreateIndex(startQuery.Field)
-	return qe.executeRangeQueryBetween(ctx, idx, startQuery, endQuery, extractor)
+	return qe.executeRangeQueryBetween(idx, startQuery, endQuery)
 }
 
 // executeEqualityQuery handles exact field value matches
-func (qe *SimpleQueryEngine) executeEqualityQuery(ctx context.Context, idx *index.SecondaryIndex,
-	value interface{}, extractor FieldExtractor) (QueryIterator, error) {
+func (qe *SimpleQueryEngine) executeEqualityQuery(idx *index.SecondaryIndex,
+	value interface{}) (QueryIterator, error) {
 	// Search the index for matching records
 	primaryKeys, err := idx.Search(value)
 	if err != nil {
@@ -99,8 +99,8 @@ func (qe *SimpleQueryEngine) executeEqualityQuery(ctx context.Context, idx *inde
 }
 
 // executeRangeQuery handles single-field range queries
-func (qe *SimpleQueryEngine) executeRangeQuery(ctx context.Context, idx *index.SecondaryIndex,
-	query FieldQuery, extractor FieldExtractor) (QueryIterator, error) {
+func (qe *SimpleQueryEngine) executeRangeQuery(idx *index.SecondaryIndex,
+	query FieldQuery) (QueryIterator, error) {
 	var startValue, endValue interface{}
 
 	switch query.Operator {
@@ -149,8 +149,8 @@ func (qe *SimpleQueryEngine) executeRangeQuery(ctx context.Context, idx *index.S
 }
 
 // executeRangeQueryBetween handles range queries between two values
-func (qe *SimpleQueryEngine) executeRangeQueryBetween(ctx context.Context, idx *index.SecondaryIndex,
-	startQuery, endQuery FieldQuery, extractor FieldExtractor) (QueryIterator, error) {
+func (qe *SimpleQueryEngine) executeRangeQueryBetween(idx *index.SecondaryIndex,
+	startQuery, endQuery FieldQuery) (QueryIterator, error) {
 	primaryKeys, err := idx.SearchRange(startQuery.Value, endQuery.Value)
 	if err != nil {
 		return nil, fmt.Errorf("range search failed: %w", err)

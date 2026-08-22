@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,25 +16,25 @@ func TestAPIKeyMiddleware(t *testing.T) {
 	}{
 		{
 			name:           "valid API key",
-			apiKey:         "test-key",
-			requestHeader:  "test-key",
+			apiKey:         testAPIKey,
+			requestHeader:  testAPIKey,
 			expectedStatus: http.StatusOK,
 		},
 		{
 			name:           "missing API key header",
-			apiKey:         "test-key",
+			apiKey:         testAPIKey,
 			requestHeader:  "",
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
 			name:           "invalid API key",
-			apiKey:         "test-key",
+			apiKey:         testAPIKey,
 			requestHeader:  "wrong-key",
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
 			name:           "empty API key in request",
-			apiKey:         "test-key",
+			apiKey:         testAPIKey,
 			requestHeader:  "",
 			expectedStatus: http.StatusUnauthorized,
 		},
@@ -51,7 +52,7 @@ func TestAPIKeyMiddleware(t *testing.T) {
 			handler := middleware(testHandler)
 
 			// Create request
-			req := httptest.NewRequest("GET", "/test", nil)
+			req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 			if tt.requestHeader != "" {
 				req.Header.Set("X-API-Key", tt.requestHeader)
 			}
@@ -72,7 +73,7 @@ func TestAPIKeyMiddleware(t *testing.T) {
 
 func TestSendSuccess(t *testing.T) {
 	w := httptest.NewRecorder()
-	data := map[string]string{"message": "test"}
+	data := map[string]string{fieldMessage: "test"}
 
 	sendSuccess(w, data)
 
@@ -81,7 +82,7 @@ func TestSendSuccess(t *testing.T) {
 	}
 
 	contentType := w.Header().Get("Content-Type")
-	if contentType != "application/json" {
+	if contentType != ContentTypeJSONHeader {
 		t.Errorf("Expected Content-Type application/json, got %s", contentType)
 	}
 
@@ -130,7 +131,7 @@ func TestSendError(t *testing.T) {
 			}
 
 			contentType := w.Header().Get("Content-Type")
-			if contentType != "application/json" {
+			if contentType != ContentTypeJSONHeader {
 				t.Errorf("Expected Content-Type application/json, got %s", contentType)
 			}
 

@@ -10,7 +10,31 @@ A **small, embeddable key-value database** built with ❤️ in Go. FreyjaDB pro
 - **🛡️ Crash Safety**: Automatic recovery with data integrity checks
 - **⚡ High Performance**: Optimized for SSDs with fast lookups and writes
 
-## 🚀 Quick Start
+## 🛠️ Development
+
+### Using Just (Recommended)
+
+This project now includes a `justfile` for streamlined development workflows. Install [Just](https://github.com/casey/just) and use:
+
+```bash
+# Show all available commands
+just help
+
+# Build the project
+just build
+
+# Run tests
+just test
+
+# Full development cycle
+just dev
+```
+
+All the traditional Makefile commands are available through Just with improved reliability and cross-platform support.
+
+### Traditional Make (Legacy)
+
+The project also maintains a Makefile for compatibility:
 
 ### Option 1: One-Command Setup (Recommended)
 
@@ -323,10 +347,26 @@ For production use cases, consider established databases like Redis, PostgreSQL,
 
 ### Prerequisites
 - Go 1.21+
-- Make
+- Make or Just (Just recommended)
 
 ### Building and Testing
 
+With Just (recommended):
+```bash
+# Build the project
+just build
+
+# Run tests
+just test
+
+# Run linter
+just lint
+
+# Run all checks
+just all
+```
+
+With Make (legacy):
 ```bash
 # Build the project
 make build

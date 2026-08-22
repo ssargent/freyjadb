@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ssargent/freyjadb/pkg/store"
+	"github.com/stretchr/testify/require"
 )
 
 // setupTestServer creates a test server with a temporary KV store
@@ -34,7 +35,7 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 	// Create server
 	serverConfig := ServerConfig{
 		Port:   0, // Use random available port
-		APIKey: "test-key",
+		APIKey: testAPIKey,
 	}
 
 	// For tests, create a minimal metrics instance to avoid Prometheus registration conflicts
@@ -46,8 +47,8 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 
 	// Return cleanup function
 	cleanup := func() {
-		kvStore.Close()
-		os.RemoveAll(tmpDir)
+		_ = kvStore.Close()      // Ignore error in cleanup
+		_ = os.RemoveAll(tmpDir) // Ignore error in cleanup
 	}
 
 	return server, cleanup
@@ -59,7 +60,7 @@ func TestStartServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	// Create KV store
 	config := store.KVStoreConfig{
@@ -76,12 +77,11 @@ func TestStartServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open KV store: %v", err)
 	}
-	defer kvStore.Close()
-
+	defer func() { _ = kvStore.Close() }() // Ignore error in cleanup
 	// Test server configuration
 	serverConfig := ServerConfig{
 		Port:   0, // Use random available port
-		APIKey: "test-key",
+		APIKey: testAPIKey,
 	}
 
 	// Note: We can't easily test the full server startup in unit tests
@@ -94,16 +94,14 @@ func TestStartServer(t *testing.T) {
 	// For now, just test that the server can be created
 	systemService := &SystemService{} // Will be closed, so no-op is fine
 	server := NewServer(kvStore, systemService, serverConfig, metrics)
-	if server == nil {
-		t.Error("Expected server to be created")
-	}
+	require.NotNil(t, server, "Expected server to be created")
 
 	if server.store != kvStore {
 		t.Error("Expected server to have the correct store")
 	}
 
-	if server.config.APIKey != "test-key" {
-		t.Errorf("Expected API key to be 'test-key', got '%s'", server.config.APIKey)
+	if server.config.APIKey != testAPIKey {
+		t.Errorf("Expected API key to be '%s', got '%s'", testAPIKey, server.config.APIKey)
 	}
 }
 
@@ -213,8 +211,8 @@ func TestServer_RelationshipOperations(t *testing.T) {
 	}
 
 	// Test deleting relationship
-	if err := server.store.DeleteRelationship("user:1", "item:1", "owns"); err != nil {
-		t.Fatalf("Failed to delete relationship: %v", err)
+	if deleteErr := server.store.DeleteRelationship("user:1", "item:1", "owns"); deleteErr != nil {
+		t.Fatalf("Failed to delete relationship: %v", deleteErr)
 	}
 
 	// Verify relationship is deleted

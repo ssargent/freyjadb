@@ -27,9 +27,7 @@ func NewLogReader(config LogReaderConfig) (*LogReader, error) {
 	// Seek to start offset if specified
 	if config.StartOffset > 0 {
 		if _, err := file.Seek(config.StartOffset, 0); err != nil {
-			if closeErr := file.Close(); closeErr != nil {
-				// Log or handle close error, but since we're returning err, perhaps ignore
-			}
+			_ = file.Close()
 			return nil, err
 		}
 	}
@@ -61,17 +59,17 @@ func (r *LogReader) ReadNext() (*codec.Record, error) {
 		return nil, ErrCorruption
 	}
 
-	keySize := int(uint32(header[4]) | uint32(header[5])<<8 | uint32(header[6])<<16 | uint32(header[7])<<24)
-	valueSize := int(uint32(header[8]) | uint32(header[9])<<8 | uint32(header[10])<<16 | uint32(header[11])<<24)
+	keySize := uint32(header[4]) | uint32(header[5])<<8 | uint32(header[6])<<16 | uint32(header[7])<<24
+	valueSize := uint32(header[8]) | uint32(header[9])<<8 | uint32(header[10])<<16 | uint32(header[11])<<24
 
 	// Read key and value data
-	dataSize := keySize + valueSize
+	dataSize := int(keySize) + int(valueSize)
 	if dataSize == 0 {
 		// This might be a tombstone or empty record
 		record := &codec.Record{
 			CRC32:     uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16 | uint32(header[3])<<24,
-			KeySize:   uint32(keySize),
-			ValueSize: uint32(valueSize),
+			KeySize:   keySize,
+			ValueSize: valueSize,
 			Timestamp: uint64(header[12]) | uint64(header[13])<<8 | uint64(header[14])<<16 |
 				uint64(header[15])<<24 | uint64(header[16])<<32 | uint64(header[17])<<40 |
 				uint64(header[18])<<48 | uint64(header[19])<<56,
@@ -112,33 +110,24 @@ func (r *LogReader) ReadNext() (*codec.Record, error) {
 
 // ReadAt reads a record at a specific offset
 func (r *LogReader) ReadAt(offset int64) (*codec.Record, error) {
-	// Always reopen the file to ensure we see the latest data
-	if r.file != nil {
-		if closeErr := r.file.Close(); closeErr != nil {
-			// Log or handle, but continue
+	// Reuse existing file handle if available, otherwise open the file
+	if r.file == nil {
+		file, err := os.Open(r.config.FilePath)
+		if err != nil {
+			return nil, err
 		}
-	}
-
-	file, err := os.Open(r.config.FilePath)
-	if err != nil {
-		return nil, err
+		r.file = file
 	}
 
 	// Seek to the specified offset
-	if _, err := file.Seek(offset, 0); err != nil {
-		if closeErr := file.Close(); closeErr != nil {
-			// Log or handle
-		}
+	if _, err := r.file.Seek(offset, 0); err != nil {
 		return nil, err
 	}
 
 	// Read the record header (20 bytes: CRC32 + KeySize + ValueSize + Timestamp)
 	header := make([]byte, 20)
-	n, err := file.Read(header)
+	n, err := r.file.Read(header)
 	if err != nil {
-		if closeErr := file.Close(); closeErr != nil {
-			// Log or handle
-		}
 		if err == io.EOF || n < 20 {
 			return nil, ErrCorruption
 		}
@@ -147,26 +136,20 @@ func (r *LogReader) ReadAt(offset int64) (*codec.Record, error) {
 
 	// Decode header to get sizes
 	if len(header) < 20 {
-		if closeErr := file.Close(); closeErr != nil {
-			// Log or handle
-		}
 		return nil, ErrCorruption
 	}
 
-	keySize := int(uint32(header[4]) | uint32(header[5])<<8 | uint32(header[6])<<16 | uint32(header[7])<<24)
-	valueSize := int(uint32(header[8]) | uint32(header[9])<<8 | uint32(header[10])<<16 | uint32(header[11])<<24)
+	keySize := uint32(header[4]) | uint32(header[5])<<8 | uint32(header[6])<<16 | uint32(header[7])<<24
+	valueSize := uint32(header[8]) | uint32(header[9])<<8 | uint32(header[10])<<16 | uint32(header[11])<<24
 
 	// Read key and value data
-	dataSize := keySize + valueSize
+	dataSize := int(keySize) + int(valueSize)
 	if dataSize == 0 {
 		// This might be a tombstone or empty record
-		if closeErr := file.Close(); closeErr != nil {
-			// Log or handle
-		}
 		record := &codec.Record{
 			CRC32:     uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16 | uint32(header[3])<<24,
-			KeySize:   uint32(keySize),
-			ValueSize: uint32(valueSize),
+			KeySize:   keySize,
+			ValueSize: valueSize,
 			Timestamp: uint64(header[12]) | uint64(header[13])<<8 | uint64(header[14])<<16 |
 				uint64(header[15])<<24 | uint64(header[16])<<32 | uint64(header[17])<<40 |
 				uint64(header[18])<<48 | uint64(header[19])<<56,
@@ -177,19 +160,12 @@ func (r *LogReader) ReadAt(offset int64) (*codec.Record, error) {
 	}
 
 	data := make([]byte, dataSize)
-	n, err = file.Read(data)
+	n, err = r.file.Read(data)
 	if err != nil {
-		if closeErr := file.Close(); closeErr != nil {
-			// Log or handle
-		}
 		if err == io.EOF || n < dataSize {
 			return nil, ErrCorruption
 		}
 		return nil, err
-	}
-
-	if closeErr := file.Close(); closeErr != nil {
-		// Log or handle
 	}
 
 	// Construct full record data for decoding
@@ -211,8 +187,8 @@ func (r *LogReader) ReadAt(offset int64) (*codec.Record, error) {
 	return record, nil
 }
 
-// Seek sets the read offset
-func (r *LogReader) Seek(offset int64) error {
+// SeekTo sets the read offset
+func (r *LogReader) SeekTo(offset int64) error {
 	if _, err := r.file.Seek(offset, 0); err != nil {
 		return err
 	}

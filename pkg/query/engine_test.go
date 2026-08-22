@@ -16,7 +16,7 @@ func TestFieldQuery_Validate(t *testing.T) {
 		{
 			name: "valid equality query",
 			query: FieldQuery{
-				Field:    "age",
+				Field:    testFieldAge,
 				Operator: "=",
 				Value:    25,
 			},
@@ -25,7 +25,7 @@ func TestFieldQuery_Validate(t *testing.T) {
 		{
 			name: "valid range query",
 			query: FieldQuery{
-				Field:    "age",
+				Field:    testFieldAge,
 				Operator: ">",
 				Value:    18,
 			},
@@ -43,7 +43,7 @@ func TestFieldQuery_Validate(t *testing.T) {
 		{
 			name: "invalid operator",
 			query: FieldQuery{
-				Field:    "age",
+				Field:    testFieldAge,
 				Operator: "invalid",
 				Value:    25,
 			},
@@ -73,21 +73,21 @@ func TestJSONFieldExtractor_Extract(t *testing.T) {
 	}{
 		{
 			name:     "extract string field",
-			jsonData: `{"name":"John","age":25}`,
-			field:    "name",
+			jsonData: testJSONNameAge,
+			field:    testFieldName,
 			want:     "John",
 			wantErr:  false,
 		},
 		{
 			name:     "extract number field",
-			jsonData: `{"name":"John","age":25}`,
-			field:    "age",
+			jsonData: testJSONNameAge,
+			field:    testFieldAge,
 			want:     float64(25), // JSON unmarshals numbers as float64
 			wantErr:  false,
 		},
 		{
 			name:     "field not found",
-			jsonData: `{"name":"John","age":25}`,
+			jsonData: testJSONNameAge,
 			field:    "email",
 			want:     nil,
 			wantErr:  true,
@@ -95,7 +95,7 @@ func TestJSONFieldExtractor_Extract(t *testing.T) {
 		{
 			name:     "invalid JSON",
 			jsonData: `{"name":"John","age":`,
-			field:    "name",
+			field:    testFieldName,
 			want:     nil,
 			wantErr:  true,
 		},
@@ -127,7 +127,7 @@ func TestSimpleQueryEngine_ExecuteQuery(t *testing.T) {
 
 	// Test query execution (will return empty results since index is empty)
 	query := FieldQuery{
-		Field:    "age",
+		Field:    testFieldAge,
 		Operator: "=",
 		Value:    25,
 	}
@@ -142,7 +142,7 @@ func TestSimpleQueryEngine_ExecuteQuery(t *testing.T) {
 		t.Error("Expected no results, but got some")
 	}
 
-	iterator.Close()
+	defer func() { _ = iterator.Close() }() // Ignore error in cleanup
 }
 
 func TestSimpleQueryEngine_IndexOperations(t *testing.T) {
@@ -170,7 +170,7 @@ func TestSimpleQueryEngine_IndexOperations(t *testing.T) {
 	// Insert records into index
 	for _, record := range testRecords {
 		key := []byte(record.key)
-		ageIndex := indexManager.GetOrCreateIndex("age")
+		ageIndex := indexManager.GetOrCreateIndex(testFieldAge)
 		err := ageIndex.Insert(record.age, key)
 		if err != nil {
 			t.Fatalf("Failed to index record %s: %v", record.key, err)
@@ -181,7 +181,7 @@ func TestSimpleQueryEngine_IndexOperations(t *testing.T) {
 
 	// Test that the query engine can be created and basic operations work
 	query := FieldQuery{
-		Field:    "age",
+		Field:    testFieldAge,
 		Operator: "=",
 		Value:    25.0,
 	}
@@ -190,7 +190,7 @@ func TestSimpleQueryEngine_IndexOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExecuteQuery failed: %v", err)
 	}
-	defer iterator.Close()
+	defer func() { _ = iterator.Close() }() // Ignore error in cleanup
 
 	// Verify the iterator was created successfully
 	if iterator == nil {
@@ -201,7 +201,7 @@ func TestSimpleQueryEngine_IndexOperations(t *testing.T) {
 
 	// Test range query creation
 	rangeQuery := FieldQuery{
-		Field:    "age",
+		Field:    testFieldAge,
 		Operator: ">=",
 		Value:    25.0,
 	}
@@ -210,7 +210,7 @@ func TestSimpleQueryEngine_IndexOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Range query failed: %v", err)
 	}
-	defer rangeIterator.Close()
+	defer func() { _ = rangeIterator.Close() }() // Ignore error in cleanup
 
 	if rangeIterator == nil {
 		t.Error("Expected range iterator to be created")
@@ -220,7 +220,7 @@ func TestSimpleQueryEngine_IndexOperations(t *testing.T) {
 
 	// Test field extraction
 	testJSON := `{"name":"Alice","age":25,"city":"New York"}`
-	ageValue, err := extractor.Extract([]byte(testJSON), "age")
+	ageValue, err := extractor.Extract([]byte(testJSON), testFieldAge)
 	if err != nil {
 		t.Fatalf("Field extraction failed: %v", err)
 	}
@@ -232,13 +232,13 @@ func TestSimpleQueryEngine_IndexOperations(t *testing.T) {
 	t.Logf("✅ Field extraction works correctly")
 
 	// Test index manager functionality
-	ageIndex := indexManager.GetOrCreateIndex("age")
+	ageIndex := indexManager.GetOrCreateIndex(testFieldAge)
 	if ageIndex == nil {
 		t.Error("Expected age index to be created")
 	}
 
 	// Test that we can get the same index again
-	sameIndex := indexManager.GetOrCreateIndex("age")
+	sameIndex := indexManager.GetOrCreateIndex(testFieldAge)
 	if sameIndex != ageIndex {
 		t.Error("Expected to get the same index instance")
 	}

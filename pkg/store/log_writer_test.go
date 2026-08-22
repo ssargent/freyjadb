@@ -14,7 +14,7 @@ import (
 func TestNewLogWriter(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_writer_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -41,7 +41,7 @@ func TestNewLogWriter(t *testing.T) {
 func TestNewLogWriter_DirectoryCreation(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_writer_dir_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	nestedDir := filepath.Join(tmpDir, "nested", "deep", "path")
 	filePath := filepath.Join(nestedDir, "test.log")
@@ -78,7 +78,7 @@ func TestNewLogWriter_InvalidPath(t *testing.T) {
 func TestLogWriter_Put(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_writer_put_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -90,7 +90,7 @@ func TestLogWriter_Put(t *testing.T) {
 
 	writer, err := NewLogWriter(config)
 	require.NoError(t, err)
-	defer writer.Close()
+	defer func() { _ = writer.Close() }() // Ignore error in cleanup
 
 	key := []byte("test_key")
 	value := []byte("test_value")
@@ -108,7 +108,7 @@ func TestLogWriter_Put(t *testing.T) {
 func TestLogWriter_MultiplePuts(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_writer_multi_put_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -120,7 +120,7 @@ func TestLogWriter_MultiplePuts(t *testing.T) {
 
 	writer, err := NewLogWriter(config)
 	require.NoError(t, err)
-	defer writer.Close()
+	defer func() { _ = writer.Close() }() // Ignore error in cleanup
 
 	// Put multiple records
 	records := []struct {
@@ -151,7 +151,7 @@ func TestLogWriter_MultiplePuts(t *testing.T) {
 func TestLogWriter_Sync(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_writer_sync_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -163,7 +163,7 @@ func TestLogWriter_Sync(t *testing.T) {
 
 	writer, err := NewLogWriter(config)
 	require.NoError(t, err)
-	defer writer.Close()
+	defer func() { _ = writer.Close() }() // Ignore error in cleanup
 
 	// Put a record
 	_, err = writer.Put([]byte("key"), []byte("value"))
@@ -177,7 +177,7 @@ func TestLogWriter_Sync(t *testing.T) {
 func TestLogWriter_FsyncInterval(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_writer_fsync_interval_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -189,7 +189,7 @@ func TestLogWriter_FsyncInterval(t *testing.T) {
 
 	writer, err := NewLogWriter(config)
 	require.NoError(t, err)
-	defer writer.Close()
+	defer func() { _ = writer.Close() }() // Ignore error in cleanup
 
 	// Put a record - should trigger fsync after interval
 	_, err = writer.Put([]byte("key"), []byte("value"))
@@ -202,7 +202,7 @@ func TestLogWriter_FsyncInterval(t *testing.T) {
 func TestLogWriter_Path(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_writer_path_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -214,7 +214,7 @@ func TestLogWriter_Path(t *testing.T) {
 
 	writer, err := NewLogWriter(config)
 	require.NoError(t, err)
-	defer writer.Close()
+	defer func() { _ = writer.Close() }() // Ignore error in cleanup
 
 	assert.Equal(t, filePath, writer.Path())
 }
@@ -222,7 +222,7 @@ func TestLogWriter_Path(t *testing.T) {
 func TestLogWriter_Size(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_writer_size_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -234,7 +234,7 @@ func TestLogWriter_Size(t *testing.T) {
 
 	writer, err := NewLogWriter(config)
 	require.NoError(t, err)
-	defer writer.Close()
+	defer func() { _ = writer.Close() }() // Ignore error in cleanup
 
 	// Initial size should be 0
 	assert.Equal(t, int64(0), writer.Size())
@@ -259,7 +259,7 @@ func TestLogWriter_Size(t *testing.T) {
 func TestLogWriter_BufferSize(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_writer_buffer_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -271,7 +271,7 @@ func TestLogWriter_BufferSize(t *testing.T) {
 
 	writer, err := NewLogWriter(config)
 	require.NoError(t, err)
-	defer writer.Close()
+	defer func() { _ = writer.Close() }() // Ignore error in cleanup
 
 	// Put a large record that exceeds buffer size
 	largeValue := make([]byte, 2000)
@@ -286,7 +286,7 @@ func TestLogWriter_BufferSize(t *testing.T) {
 func TestLogWriter_ConcurrentAccess(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_writer_concurrent_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -298,7 +298,7 @@ func TestLogWriter_ConcurrentAccess(t *testing.T) {
 
 	writer, err := NewLogWriter(config)
 	require.NoError(t, err)
-	defer writer.Close()
+	defer func() { _ = writer.Close() }() // Ignore error in cleanup
 
 	done := make(chan bool, 2)
 
@@ -333,7 +333,7 @@ func TestLogWriter_ConcurrentAccess(t *testing.T) {
 func BenchmarkLogWriter_Put(b *testing.B) {
 	tmpDir, err := os.MkdirTemp("", "log_writer_bench_put")
 	require.NoError(b, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -345,7 +345,7 @@ func BenchmarkLogWriter_Put(b *testing.B) {
 
 	writer, err := NewLogWriter(config)
 	require.NoError(b, err)
-	defer writer.Close()
+	defer func() { _ = writer.Close() }() // Ignore error in cleanup
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -360,7 +360,7 @@ func BenchmarkLogWriter_Put(b *testing.B) {
 func BenchmarkLogWriter_PutWithFsync(b *testing.B) {
 	tmpDir, err := os.MkdirTemp("", "log_writer_bench_fsync")
 	require.NoError(b, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -372,7 +372,7 @@ func BenchmarkLogWriter_PutWithFsync(b *testing.B) {
 
 	writer, err := NewLogWriter(config)
 	require.NoError(b, err)
-	defer writer.Close()
+	defer func() { _ = writer.Close() }() // Ignore error in cleanup
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

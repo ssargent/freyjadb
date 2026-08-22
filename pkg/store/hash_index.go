@@ -1,6 +1,8 @@
 package store
 
 import (
+	"fmt"
+	"math"
 	"strings"
 	"sync"
 )
@@ -32,8 +34,7 @@ func (idx *HashIndex) Get(key []byte) (*IndexEntry, bool) {
 	idx.mutex.RLock()
 	defer idx.mutex.RUnlock()
 
-	keyStr := string(key)
-	entry, exists := idx.entries[keyStr]
+	entry, exists := idx.entries[string(key)]
 	return entry, exists
 }
 
@@ -89,33 +90,25 @@ func (idx *HashIndex) KeysWithPrefix(prefix string) []string {
 }
 
 // ScanPrefix returns a channel of keys that match the prefix
-// This allows for streaming results and better memory management
 func (idx *HashIndex) ScanPrefix(prefix string) <-chan string {
-	ch := make(chan string, 100) // Buffered channel for performance
+	idx.mutex.RLock()
+	keys := make([]string, 0, len(idx.entries))
 
-	go func() {
-		defer close(ch)
-
-		idx.mutex.RLock()
-		keys := make([]string, 0, len(idx.entries))
-
-		// Collect matching keys
-		for key := range idx.entries {
-			if strings.HasPrefix(key, prefix) {
-				keys = append(keys, key)
-			}
+	// Collect matching keys
+	for key := range idx.entries {
+		if strings.HasPrefix(key, prefix) {
+			keys = append(keys, key)
 		}
-		idx.mutex.RUnlock()
+	}
+	idx.mutex.RUnlock()
 
-		// Send keys through channel
-		for _, key := range keys {
-			select {
-			case ch <- key:
-			case <-ch: // Channel closed by receiver
-				return
-			}
-		}
-	}()
+	// Buffer sized to the full result set: every send below is
+	// non-blocking, so no goroutine or cancellation channel is needed.
+	ch := make(chan string, len(keys))
+	for _, key := range keys {
+		ch <- key
+	}
+	close(ch)
 
 	return ch
 }
@@ -129,12 +122,12 @@ func (idx *HashIndex) BuildFromLog(reader *LogReader) error {
 	idx.entries = make(map[string]*IndexEntry)
 
 	// Reset reader to beginning
-	if err := reader.Seek(0); err != nil {
+	if err := reader.SeekTo(0); err != nil {
 		return err
 	}
 
 	iterator := reader.Iterator()
-	defer iterator.Close()
+	defer func() { _ = iterator.Close() }() // Ignore error in cleanup
 
 	for iterator.Next() {
 		record := iterator.Record()
@@ -142,11 +135,16 @@ func (idx *HashIndex) BuildFromLog(reader *LogReader) error {
 			continue
 		}
 
+		size := record.Size()
+		if size < 0 || size > math.MaxUint32 {
+			return fmt.Errorf("record size %d exceeds uint32 range", size)
+		}
+
 		keyStr := string(record.Key)
 		entry := &IndexEntry{
 			FileID:    0, // Single file for now
-			Offset:    reader.Offset() - int64(record.Size()),
-			Size:      uint32(record.Size()),
+			Offset:    reader.Offset() - int64(size),
+			Size:      uint32(size),
 			Timestamp: record.Timestamp,
 		}
 
@@ -167,11 +165,13 @@ func (idx *HashIndex) Stats() *IndexStats {
 	defer idx.mutex.RUnlock()
 
 	return &IndexStats{
-		TotalKeys: len(idx.entries),
+		TotalKeys:  len(idx.entries),
+		Tombstones: 0, // TODO: Implement tombstone counting
 	}
 }
 
 // IndexStats holds statistics about the index
 type IndexStats struct {
-	TotalKeys int
+	TotalKeys  int
+	Tombstones int
 }

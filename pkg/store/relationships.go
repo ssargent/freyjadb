@@ -58,7 +58,7 @@ func parseRelationshipKey(key string) (direction, fromKey, relation, toKey strin
 // Note: This function assumes the caller already holds the mutex
 func (kv *KVStore) validateRelationshipKeys(fromKey, toKey string) error {
 	if !kv.isOpen {
-		return &KVError{"store is not open"}
+		return &KVError{errStoreNotOpen}
 	}
 
 	// Check if fromKey exists

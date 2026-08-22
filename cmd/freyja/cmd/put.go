@@ -21,7 +21,7 @@ Example:
 		value := []byte(args[1])
 
 		// Get store from context
-		kv, ok := cmd.Context().Value("store").(*store.KVStore)
+		kv, ok := cmd.Context().Value(storeContextKey).(*store.KVStore)
 		if !ok {
 			fmt.Printf("Error: store not found in context\n")
 			return
@@ -37,6 +37,7 @@ Example:
 	},
 }
 
+//nolint:gochecknoinits // cobra requires init() to register subcommands
 func init() {
 	rootCmd.AddCommand(putCmd)
 }

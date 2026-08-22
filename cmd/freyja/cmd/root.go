@@ -18,6 +18,18 @@ import (
 // Global container for dependency injection
 var container *di.Container
 
+// defaultDataDir is the default data directory used across commands when
+// no --data-dir flag is provided.
+const defaultDataDir = "./data"
+
+// contextKey is an unexported type for context keys defined in this package,
+// avoiding collisions with keys defined in other packages (staticcheck SA1029).
+type contextKey string
+
+// storeContextKey is the context key used to pass the *store.KVStore
+// created by the root command's PersistentPreRunE down to subcommands.
+const storeContextKey contextKey = "store"
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "freyja",
@@ -61,7 +73,7 @@ optional partitioning and sort keys.`,
 			fmt.Printf("Recovered from corruption: %d records truncated\n", recovery.RecordsTruncated)
 		}
 		// Store in command context
-		cmd.SetContext(context.WithValue(cmd.Context(), "store", kvStore))
+		cmd.SetContext(context.WithValue(cmd.Context(), storeContextKey, kvStore))
 		return nil
 	},
 }
@@ -75,9 +87,10 @@ func Execute() {
 	}
 }
 
+//nolint:gochecknoinits // cobra requires init() to register subcommands
 func init() {
 	// Global data directory flag
-	rootCmd.PersistentFlags().StringP("data-dir", "d", "./data", "Data directory for the store")
+	rootCmd.PersistentFlags().StringP("data-dir", "d", defaultDataDir, "Data directory for the store")
 
 	// Setup commands
 	setupDeleteCmd()

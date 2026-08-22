@@ -16,7 +16,7 @@ func TestServiceCommands(t *testing.T) {
 	// Create temporary directory for test
 	tmpDir, err := os.MkdirTemp("", "freyja_service_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	dataDir := filepath.Join(tmpDir, "data")
 	configPath := filepath.Join(tmpDir, "config.yaml")
@@ -25,14 +25,14 @@ func TestServiceCommands(t *testing.T) {
 		cfg := &config.Config{
 			DataDir: dataDir,
 			Port:    8080,
-			Bind:    "127.0.0.1",
+			Bind:    config.DefaultBindAddress,
 			Security: config.Security{
 				SystemKey:    "test-system-key",
 				SystemAPIKey: "test-system-api-key",
 				ClientAPIKey: "test-client-api-key",
 			},
 			Logging: config.Logging{
-				Level: "info",
+				Level: testLogLevelInfo,
 			},
 		}
 
@@ -48,7 +48,7 @@ func TestServiceCommands(t *testing.T) {
 				strings.Contains(errorMsg, "permission-denied"))
 		} else {
 			// If running as root, verify unit file was created
-			unitPath := "/etc/systemd/system/freyja.service"
+			unitPath := servicePath
 			if _, err := os.Stat(unitPath); err == nil {
 				content, err := os.ReadFile(unitPath)
 				require.NoError(t, err)
@@ -64,14 +64,14 @@ func TestServiceCommands(t *testing.T) {
 		cfg := &config.Config{
 			DataDir: "/var/lib/freyjadb",
 			Port:    9000,
-			Bind:    "127.0.0.1",
+			Bind:    config.DefaultBindAddress,
 			Security: config.Security{
 				SystemKey:    "test-system-key",
 				SystemAPIKey: "test-system-api-key",
 				ClientAPIKey: "test-client-api-key",
 			},
 			Logging: config.Logging{
-				Level: "info",
+				Level: testLogLevelInfo,
 			},
 		}
 
@@ -87,7 +87,7 @@ func TestServiceCommands(t *testing.T) {
 				strings.Contains(errorMsg, "permission-denied"))
 		} else {
 			// Verify unit file content if it was created
-			unitPath := "/etc/systemd/system/freyja.service"
+			unitPath := servicePath
 			if _, err := os.Stat(unitPath); err == nil {
 				content, err := os.ReadFile(unitPath)
 				require.NoError(t, err)
@@ -108,14 +108,14 @@ func TestServiceCommands(t *testing.T) {
 		cfg := &config.Config{
 			DataDir: dataDir,
 			Port:    8080,
-			Bind:    "127.0.0.1",
+			Bind:    config.DefaultBindAddress,
 			Security: config.Security{
-				SystemKey:    "test-system-key-1234567890123456",
-				SystemAPIKey: "test-system-api-key-1234567890123456",
-				ClientAPIKey: "test-client-api-key-1234567890123456",
+				SystemKey:    testSystemKey,
+				SystemAPIKey: testSystemAPIKey,
+				ClientAPIKey: testClientAPIKey,
 			},
 			Logging: config.Logging{
-				Level: "info",
+				Level: testLogLevelInfo,
 			},
 		}
 
@@ -195,14 +195,14 @@ func TestServiceCommands(t *testing.T) {
 		cfg := &config.Config{
 			DataDir: "/test/data",
 			Port:    8080,
-			Bind:    "127.0.0.1",
+			Bind:    config.DefaultBindAddress,
 			Security: config.Security{
 				SystemKey:    "test-key",
 				SystemAPIKey: "test-api-key",
 				ClientAPIKey: "test-client-key",
 			},
 			Logging: config.Logging{
-				Level: "info",
+				Level: testLogLevelInfo,
 			},
 		}
 
@@ -218,7 +218,7 @@ func TestServiceCommands(t *testing.T) {
 				strings.Contains(errorMsg, "permission-denied"))
 		} else {
 			// If unit file was created, verify it contains expected content
-			unitPath := "/etc/systemd/system/freyja.service"
+			unitPath := servicePath
 			if _, err := os.Stat(unitPath); err == nil {
 				content, err := os.ReadFile(unitPath)
 				require.NoError(t, err)

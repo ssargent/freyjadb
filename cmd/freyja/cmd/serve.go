@@ -48,7 +48,7 @@ Examples:
 		}
 
 		if dataDir == "" {
-			dataDir = "./data" // Default data directory
+			dataDir = defaultDataDir // Default data directory
 		}
 
 		// Use system key as encryption key if not specified
@@ -60,7 +60,7 @@ Examples:
 		}
 
 		// Get store from context
-		kv, ok := cmd.Context().Value("store").(*store.KVStore)
+		kv, ok := cmd.Context().Value(storeContextKey).(*store.KVStore)
 		if !ok {
 			cmd.Println("Error: store not found in context")
 			return
@@ -89,16 +89,21 @@ Examples:
 	},
 }
 
+//nolint:gochecknoinits // cobra requires init() to register subcommands
 func init() {
 	rootCmd.AddCommand(serveCmd)
 	serveCmd.Flags().IntP("port", "p", 8080, "Port to listen on")
 	serveCmd.Flags().String("api-key", "", "API key for user authentication (required)")
 	serveCmd.Flags().String("system-key", "", "System API key for administrative operations (required)")
-	serveCmd.Flags().String("data-dir", "./data", "Data directory for storing databases")
+	serveCmd.Flags().String("data-dir", defaultDataDir, "Data directory for storing databases")
 	serveCmd.Flags().String("system-encryption-key", "", "Encryption key for system data (32 bytes recommended)")
 	serveCmd.Flags().Bool("enable-encryption", false, "Enable encryption for system data")
-	serveCmd.MarkFlagRequired("api-key")
-	serveCmd.MarkFlagRequired("system-key")
+	if err := serveCmd.MarkFlagRequired("api-key"); err != nil {
+		panic(fmt.Sprintf("failed to mark api-key flag as required: %v", err))
+	}
+	if err := serveCmd.MarkFlagRequired("system-key"); err != nil {
+		panic(fmt.Sprintf("failed to mark system-key flag as required: %v", err))
+	}
 }
 
 // loadExistingSystemKey attempts to load the system API key from an existing initialized system
@@ -114,10 +119,14 @@ func loadExistingSystemKey(dataDir string) (string, error) {
 	}
 
 	// Open system service
-	if err := systemService.Open(); err != nil {
-		return "", fmt.Errorf("failed to open system service (run 'freyja init' first): %w", err)
+	if openErr := systemService.Open(); openErr != nil {
+		return "", fmt.Errorf("failed to open system service (run 'freyja init' first): %w", openErr)
 	}
-	defer systemService.Close()
+	defer func() {
+		if closeErr := systemService.Close(); closeErr != nil {
+			fmt.Printf("Warning: failed to close system service: %v\n", closeErr)
+		}
+	}()
 
 	// Try to get the system API key
 	systemAPIKey, err := systemService.GetAPIKey("system-root")

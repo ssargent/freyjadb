@@ -50,7 +50,7 @@ func NewServer(store IKVStore, systemService *SystemService, config ServerConfig
 //	@Security		ApiKeyAuth
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	s.metrics.RecordHealthCheck(true)
-	sendSuccess(w, map[string]string{"status": "healthy"})
+	sendSuccess(w, map[string]string{fieldStatus: "healthy"})
 }
 
 // handlePut godoc
@@ -72,20 +72,16 @@ func (s *Server) handlePut(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	key := chi.URLParam(r, "key")
 	if key == "" {
-		if s.metrics != nil {
-			s.metrics.RecordDBOperation("put", false, time.Since(start))
-		}
+		s.recordPutMetrics(false, start)
 		sendError(w, "Key is required", http.StatusBadRequest)
 		return
 	}
 
 	// Read the request body
 	body := make([]byte, r.ContentLength)
-	_, err := r.Body.Read(body)
-	if err != nil && err.Error() != "EOF" {
-		if s.metrics != nil {
-			s.metrics.RecordDBOperation("put", false, time.Since(start))
-		}
+	_, readErr := r.Body.Read(body)
+	if readErr != nil && readErr.Error() != "EOF" {
+		s.recordPutMetrics(false, start)
 		sendError(w, "Failed to read request body", http.StatusBadRequest)
 		return
 	}
@@ -100,19 +96,15 @@ func (s *Server) handlePut(w http.ResponseWriter, r *http.Request) {
 	if contentType == ContentTypeJSON {
 		// Validate that the body is valid JSON
 		var jsonData interface{}
-		if err := json.Unmarshal(body, &jsonData); err != nil {
-			if s.metrics != nil {
-				s.metrics.RecordDBOperation("put", false, time.Since(start))
-			}
+		if unmarshalErr := json.Unmarshal(body, &jsonData); unmarshalErr != nil {
+			s.recordPutMetrics(false, start)
 			sendError(w, "Invalid JSON in request body", http.StatusBadRequest)
 			return
 		}
 		// Re-marshal to ensure consistent formatting
-		formattedJSON, err := json.Marshal(jsonData)
-		if err != nil {
-			if s.metrics != nil {
-				s.metrics.RecordDBOperation("put", false, time.Since(start))
-			}
+		formattedJSON, marshalErr := json.Marshal(jsonData)
+		if marshalErr != nil {
+			s.recordPutMetrics(false, start)
 			sendError(w, "Failed to format JSON", http.StatusInternalServerError)
 			return
 		}
@@ -124,26 +116,28 @@ func (s *Server) handlePut(w http.ResponseWriter, r *http.Request) {
 	// Encode data with content type metadata
 	encodedData := encodeDataWithContentType(dataToStore, contentType)
 
-	unescapedKey, err := url.QueryUnescape(chi.URLParam(r, "key"))
-	if err != nil {
-		if s.metrics != nil {
-			s.metrics.RecordDBOperation("put", false, time.Since(start))
-		}
+	unescapedKey, unescapeErr := url.QueryUnescape(chi.URLParam(r, "key"))
+	if unescapeErr != nil {
+		s.recordPutMetrics(false, start)
 		sendError(w, "Invalid key encoding", http.StatusBadRequest)
 		return
 	}
-	if err := s.store.Put([]byte(unescapedKey), encodedData); err != nil {
-		if s.metrics != nil {
-			s.metrics.RecordDBOperation("put", false, time.Since(start))
-		}
-		sendError(w, fmt.Sprintf("Failed to put key-value: %v", err), http.StatusInternalServerError)
+	if putErr := s.store.Put([]byte(unescapedKey), encodedData); putErr != nil {
+		s.recordPutMetrics(false, start)
+		sendError(w, fmt.Sprintf("Failed to put key-value: %v", putErr), http.StatusInternalServerError)
 		return
 	}
 
+	s.recordPutMetrics(true, start)
+	sendSuccess(w, map[string]string{fieldMessage: "Key-value pair stored successfully"})
+}
+
+// recordPutMetrics records the outcome of a put operation, guarding against
+// a nil metrics collector (used in some test setups).
+func (s *Server) recordPutMetrics(success bool, start time.Time) {
 	if s.metrics != nil {
-		s.metrics.RecordDBOperation("put", true, time.Since(start))
+		s.metrics.RecordDBOperation("put", success, time.Since(start))
 	}
-	sendSuccess(w, map[string]string{"message": "Key-value pair stored successfully"})
 }
 
 // handleGet godoc
@@ -221,7 +215,7 @@ func (s *Server) handleGet(w http.ResponseWriter, r *http.Request) {
 			response.Value = string(data)
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", ContentTypeJSONHeader)
 		sendSuccess(w, response)
 	} else {
 		// Original behavior: return raw data
@@ -263,7 +257,7 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.metrics.RecordDBOperation("delete", true, time.Since(start))
-	sendSuccess(w, map[string]string{"message": "Key deleted successfully"})
+	sendSuccess(w, map[string]string{fieldMessage: "Key deleted successfully"})
 }
 
 // handleListKeys godoc
@@ -324,7 +318,7 @@ func (s *Server) handleCreateRelationship(w http.ResponseWriter, r *http.Request
 	}
 
 	s.metrics.RecordRelationshipOperation("create", true)
-	sendSuccess(w, map[string]string{"message": "Relationship created successfully"})
+	sendSuccess(w, map[string]string{fieldMessage: "Relationship created successfully"})
 }
 
 // handleDeleteRelationship godoc
@@ -357,7 +351,7 @@ func (s *Server) handleDeleteRelationship(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	sendSuccess(w, map[string]string{"message": "Relationship deleted successfully"})
+	sendSuccess(w, map[string]string{fieldMessage: "Relationship deleted successfully"})
 }
 
 // handleGetRelationships godoc
@@ -473,6 +467,11 @@ const (
 // encodeDataWithContentType encodes data with content-type metadata
 func encodeDataWithContentType(data []byte, contentType int) []byte {
 	header := make([]byte, ContentTypeHeader)
+	// contentType is always one of the small ContentType* constants above,
+	// but guard against out-of-range values before the narrowing conversion.
+	if contentType < 0 || contentType > 255 {
+		contentType = ContentTypeRaw
+	}
 	header[0] = byte(contentType)
 	header[1] = 0 // null terminator
 
@@ -498,7 +497,7 @@ func decodeDataWithContentType(encodedData []byte) ([]byte, int) {
 
 // getContentTypeFromHeader extracts content type from HTTP Content-Type header
 func getContentTypeFromHeader(contentTypeHeader string) int {
-	if strings.Contains(contentTypeHeader, "application/json") {
+	if strings.Contains(contentTypeHeader, ContentTypeJSONHeader) {
 		return ContentTypeJSON
 	}
 	return ContentTypeRaw
@@ -508,9 +507,9 @@ func getContentTypeFromHeader(contentTypeHeader string) int {
 func getContentTypeHeader(contentType int) string {
 	switch contentType {
 	case ContentTypeJSON:
-		return "application/json"
+		return ContentTypeJSONHeader
 	default:
-		return "application/octet-stream"
+		return ContentTypeOctetStreamHeader
 	}
 }
 
@@ -568,8 +567,8 @@ func (s *Server) handleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sendSuccess(w, map[string]interface{}{
-		"message": "API key created successfully",
-		"id":      apiKey.ID,
+		fieldMessage: "API key created successfully",
+		"id":         apiKey.ID,
 	})
 }
 
@@ -644,7 +643,7 @@ func (s *Server) handleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendSuccess(w, map[string]string{"message": "API key deleted successfully"})
+	sendSuccess(w, map[string]string{fieldMessage: "API key deleted successfully"})
 }
 
 // handleGetSystemConfig godoc
@@ -706,5 +705,5 @@ func (s *Server) handleSetSystemConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendSuccess(w, map[string]string{"message": "Configuration updated successfully"})
+	sendSuccess(w, map[string]string{fieldMessage: "Configuration updated successfully"})
 }

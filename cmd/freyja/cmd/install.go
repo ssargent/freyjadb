@@ -4,6 +4,7 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -138,7 +139,9 @@ func createDataDirectory(dataDir string) error {
 
 	// Change ownership to freyja user if it exists, otherwise keep as root
 	if _, err := exec.LookPath("id"); err == nil {
-		if err := exec.Command("chown", "-R", "freyja:freyja", dataDir).Run(); err != nil {
+		//nolint:gosec // G204: dataDir comes from the --data-dir CLI flag of this
+		// root-only local install command, not from unvalidated network/user input.
+		if err := exec.CommandContext(context.Background(), "chown", "-R", "freyja:freyja", dataDir).Run(); err != nil {
 			// If freyja user doesn't exist, that's okay - keep as root
 			fmt.Printf("Warning: Could not change ownership to freyja user: %v\n", err)
 		}
@@ -149,7 +152,7 @@ func createDataDirectory(dataDir string) error {
 
 // isServiceRunning checks if the freyja service is currently running
 func isServiceRunning() (bool, error) {
-	cmd := exec.Command("systemctl", "is-active", "freyja")
+	cmd := exec.CommandContext(context.Background(), "systemctl", "is-active", "freyja")
 	output, err := cmd.Output()
 	if err != nil {
 		return false, err
@@ -161,7 +164,7 @@ func isServiceRunning() (bool, error) {
 
 // stopService stops the freyja service
 func stopService() error {
-	cmd := exec.Command("systemctl", "stop", "freyja")
+	cmd := exec.CommandContext(context.Background(), "systemctl", "stop", "freyja")
 	return cmd.Run()
 }
 
@@ -169,7 +172,7 @@ func stopService() error {
 func buildAndInstallBinary() error {
 	// Build Linux binary
 	fmt.Printf("Building freyja binary...\n")
-	buildCmd := exec.Command("make", "build-linux")
+	buildCmd := exec.CommandContext(context.Background(), "make", "build-linux")
 	buildCmd.Dir = "/Users/scott/source/github/ssargent/freyjadb" // Adjust path as needed
 	if err := buildCmd.Run(); err != nil {
 		return fmt.Errorf("failed to build binary: %w", err)
@@ -177,14 +180,14 @@ func buildAndInstallBinary() error {
 
 	// Install binary
 	fmt.Printf("Installing binary to /usr/local/bin...\n")
-	installCmd := exec.Command("cp", "bin/freyja_unix", "/usr/local/bin/freyja")
+	installCmd := exec.CommandContext(context.Background(), "cp", "bin/freyja_unix", "/usr/local/bin/freyja")
 	installCmd.Dir = "/Users/scott/source/github/ssargent/freyjadb" // Adjust path as needed
 	if err := installCmd.Run(); err != nil {
 		return fmt.Errorf("failed to install binary: %w", err)
 	}
 
 	// Make executable
-	if err := exec.Command("chmod", "+x", "/usr/local/bin/freyja").Run(); err != nil {
+	if err := exec.CommandContext(context.Background(), "chmod", "+x", "/usr/local/bin/freyja").Run(); err != nil {
 		return fmt.Errorf("failed to make binary executable: %w", err)
 	}
 
@@ -215,7 +218,11 @@ WantedBy=multi-user.target
 	if err != nil {
 		return fmt.Errorf("failed to create service file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			fmt.Printf("Warning: failed to close file: %v\n", err)
+		}
+	}()
 
 	if _, err := file.WriteString(serviceContent); err != nil {
 		return fmt.Errorf("failed to write service file: %w", err)
@@ -227,7 +234,7 @@ WantedBy=multi-user.target
 
 // reloadSystemd reloads the systemd daemon
 func reloadSystemd() error {
-	cmd := exec.Command("systemctl", "daemon-reload")
+	cmd := exec.CommandContext(context.Background(), "systemctl", "daemon-reload")
 	return cmd.Run()
 }
 
@@ -235,13 +242,13 @@ func reloadSystemd() error {
 func enableAndStartService() error {
 	// Enable service
 	fmt.Printf("Enabling freyja service...\n")
-	if err := exec.Command("systemctl", "enable", "freyja").Run(); err != nil {
+	if err := exec.CommandContext(context.Background(), "systemctl", "enable", "freyja").Run(); err != nil {
 		return fmt.Errorf("failed to enable service: %w", err)
 	}
 
 	// Start service
 	fmt.Printf("Starting freyja service...\n")
-	if err := exec.Command("systemctl", "start", "freyja").Run(); err != nil {
+	if err := exec.CommandContext(context.Background(), "systemctl", "start", "freyja").Run(); err != nil {
 		return fmt.Errorf("failed to start service: %w", err)
 	}
 

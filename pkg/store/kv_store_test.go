@@ -13,7 +13,7 @@ func TestKVStore_BasicOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	// Create KV store
 	config := KVStoreConfig{
@@ -32,14 +32,14 @@ func TestKVStore_BasicOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open KV store: %v", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }() // Ignore error in cleanup
 
 	// Test Put operation
 	key := []byte("test_key")
 	value := []byte("test_value")
 
-	if err := store.Put(key, value); err != nil {
-		t.Fatalf("Failed to put key-value: %v", err)
+	if putErr := store.Put(key, value); putErr != nil {
+		t.Fatalf("Failed to put key-value: %v", putErr)
 	}
 
 	// Test Get operation
@@ -59,8 +59,8 @@ func TestKVStore_BasicOperations(t *testing.T) {
 	}
 
 	// Test Delete operation
-	if err := store.Delete(key); err != nil {
-		t.Fatalf("Failed to delete key: %v", err)
+	if delErr := store.Delete(key); delErr != nil {
+		t.Fatalf("Failed to delete key: %v", delErr)
 	}
 
 	// Verify key is deleted
@@ -76,7 +76,7 @@ func TestKVStore_UpdateValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	// Create KV store
 	config := KVStoreConfig{
@@ -94,14 +94,14 @@ func TestKVStore_UpdateValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open KV store: %v", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }() // Ignore error in cleanup
 
 	key := []byte("update_key")
 
 	// Put initial value
 	initialValue := []byte("initial")
-	if err := store.Put(key, initialValue); err != nil {
-		t.Fatalf("Failed to put initial value: %v", err)
+	if putErr := store.Put(key, initialValue); putErr != nil {
+		t.Fatalf("Failed to put initial value: %v", putErr)
 	}
 
 	// Verify initial value
@@ -115,8 +115,8 @@ func TestKVStore_UpdateValue(t *testing.T) {
 
 	// Update value
 	updatedValue := []byte("updated")
-	if err := store.Put(key, updatedValue); err != nil {
-		t.Fatalf("Failed to put updated value: %v", err)
+	if putErr := store.Put(key, updatedValue); putErr != nil {
+		t.Fatalf("Failed to put updated value: %v", putErr)
 	}
 
 	// Verify updated value
@@ -135,7 +135,7 @@ func TestKVStore_Reopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
@@ -157,13 +157,13 @@ func TestKVStore_Reopen(t *testing.T) {
 	// Put some data
 	key := []byte("persistent_key")
 	value := []byte("persistent_value")
-	if err := store1.Put(key, value); err != nil {
-		t.Fatalf("Failed to put data: %v", err)
+	if putErr := store1.Put(key, value); putErr != nil {
+		t.Fatalf("Failed to put data: %v", putErr)
 	}
 
 	// Close first instance
-	if err := store1.Close(); err != nil {
-		t.Fatalf("Failed to close first KV store: %v", err)
+	if closeErr := store1.Close(); closeErr != nil {
+		t.Fatalf("Failed to close first KV store: %v", closeErr)
 	}
 
 	// Create second instance (reopen)
@@ -176,7 +176,7 @@ func TestKVStore_Reopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open second KV store: %v", err)
 	}
-	defer store2.Close()
+	defer func() { _ = store2.Close() }() // Ignore error in cleanup
 
 	// Verify data persists
 	retrieved, err := store2.Get(key)
@@ -194,7 +194,7 @@ func TestKVStore_Stats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
@@ -211,7 +211,7 @@ func TestKVStore_Stats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open KV store: %v", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }() // Ignore error in cleanup
 
 	// Initially empty
 	stats := store.Stats()
@@ -254,13 +254,16 @@ func TestKVStore_CrashSafeReopen_CleanFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
 		FsyncInterval: 0,
 		MaxRecordSize: 4096,
 	}
+
+	keys := [][]byte{[]byte("key1"), []byte("key2"), []byte("key3")}
+	values := [][]byte{[]byte("value1"), []byte("value2"), []byte("value3")}
 
 	// First instance - create and populate data
 	store1, err := NewKVStore(config)
@@ -272,28 +275,12 @@ func TestKVStore_CrashSafeReopen_CleanFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open first KV store: %v", err)
 	}
+	assertCleanStartupRecovery(t, recoveryResult)
 
-	// Verify clean startup (no corruption)
-	if recoveryResult.RecordsTruncated != 0 {
-		t.Errorf("Expected no records truncated on clean startup, got %d", recoveryResult.RecordsTruncated)
-	}
+	putAllOrFail(t, store1, keys, values)
 
-	if recoveryResult.FileSizeBefore != 0 {
-		t.Errorf("Expected file size before to be 0 on clean startup, got %d", recoveryResult.FileSizeBefore)
-	}
-
-	// Add some data
-	keys := [][]byte{[]byte("key1"), []byte("key2"), []byte("key3")}
-	values := [][]byte{[]byte("value1"), []byte("value2"), []byte("value3")}
-
-	for i, key := range keys {
-		if err := store1.Put(key, values[i]); err != nil {
-			t.Fatalf("Failed to put key %d: %v", i, err)
-		}
-	}
-
-	if err := store1.Close(); err != nil {
-		t.Fatalf("Failed to close first KV store: %v", err)
+	if closeErr := store1.Close(); closeErr != nil {
+		t.Fatalf("Failed to close first KV store: %v", closeErr)
 	}
 
 	// Second instance - reopen and verify recovery
@@ -306,24 +293,48 @@ func TestKVStore_CrashSafeReopen_CleanFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open second KV store: %v", err)
 	}
-	defer store2.Close()
+	defer func() { _ = store2.Close() }() // Ignore error in cleanup
 
-	// Verify recovery statistics
-	if recoveryResult2.RecordsValidated != 3 {
-		t.Errorf("Expected 3 records validated, got %d", recoveryResult2.RecordsValidated)
+	assertReopenRecoveryStats(t, recoveryResult2, int64(len(keys)))
+	assertAllRetrievable(t, store2, keys, values)
+}
+
+func assertCleanStartupRecovery(t *testing.T, r *RecoveryResult) {
+	t.Helper()
+	if r.RecordsTruncated != 0 {
+		t.Errorf("Expected no records truncated on clean startup, got %d", r.RecordsTruncated)
 	}
-
-	if recoveryResult2.RecordsTruncated != 0 {
-		t.Errorf("Expected no records truncated, got %d", recoveryResult2.RecordsTruncated)
+	if r.FileSizeBefore != 0 {
+		t.Errorf("Expected file size before to be 0 on clean startup, got %d", r.FileSizeBefore)
 	}
+}
 
-	if !recoveryResult2.IndexRebuilt {
+func assertReopenRecoveryStats(t *testing.T, r *RecoveryResult, expectedRecords int64) {
+	t.Helper()
+	if r.RecordsValidated != expectedRecords {
+		t.Errorf("Expected %d records validated, got %d", expectedRecords, r.RecordsValidated)
+	}
+	if r.RecordsTruncated != 0 {
+		t.Errorf("Expected no records truncated, got %d", r.RecordsTruncated)
+	}
+	if !r.IndexRebuilt {
 		t.Error("Expected index to be rebuilt")
 	}
+}
 
-	// Verify data integrity
+func putAllOrFail(t *testing.T, store *KVStore, keys, values [][]byte) {
+	t.Helper()
 	for i, key := range keys {
-		retrieved, err := store2.Get(key)
+		if err := store.Put(key, values[i]); err != nil {
+			t.Fatalf("Failed to put key %d: %v", i, err)
+		}
+	}
+}
+
+func assertAllRetrievable(t *testing.T, store *KVStore, keys, values [][]byte) {
+	t.Helper()
+	for i, key := range keys {
+		retrieved, err := store.Get(key)
 		if err != nil {
 			t.Fatalf("Failed to get key %d: %v", i, err)
 		}
@@ -343,7 +354,7 @@ func TestKVStore_CrashSafeReopen_EmptyFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
@@ -360,7 +371,7 @@ func TestKVStore_CrashSafeReopen_EmptyFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open KV store: %v", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }() // Ignore error in cleanup
 
 	// Verify empty file recovery
 	if recoveryResult.RecordsValidated != 0 {
@@ -386,7 +397,7 @@ func TestKVStore_ValidateLogFile_DecomposedFunctions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	store, err := NewKVStore(KVStoreConfig{
 		DataDir:       tmpDir,
@@ -427,7 +438,7 @@ func TestKVStore_RecordSizeValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	// Create KV store with small max record size for testing
 	config := KVStoreConfig{
@@ -445,7 +456,7 @@ func TestKVStore_RecordSizeValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open KV store: %v", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }() // Ignore error in cleanup
 
 	// Test with record size within limit
 	smallKey := []byte("small_key")

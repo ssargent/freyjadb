@@ -116,11 +116,12 @@ func NewStore(dataDir string) (Store, error) {
 			if seg != "001.data" && seg != "002.data" {
 				return nil, fmt.Errorf("invalid segment name: %s", seg)
 			}
+			//nolint:gosec // G304: seg is one of the two hardcoded literals above, not external input
 			f, err := os.Create(filepath.Join(dataDir, seg))
 			if err != nil {
 				return nil, err
 			}
-			f.Close()
+			_ = f.Close() // Ignore error in cleanup
 		}
 	}
 

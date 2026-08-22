@@ -35,7 +35,7 @@ func TestQueryEngine_Interface(t *testing.T) {
 	// Test interface methods exist
 	ctx := context.Background()
 	var extractor FieldExtractor = &JSONFieldExtractor{}
-	query := FieldQuery{Field: "name", Operator: "=", Value: "Alice"}
+	query := FieldQuery{Field: testFieldName, Operator: "=", Value: "Alice"}
 
 	// These would normally be implemented by a concrete type
 	// We're just testing that the interface is properly defined
@@ -59,7 +59,7 @@ func TestJSONFieldExtractor_NullValues(t *testing.T) {
 
 	// Test with null value in JSON
 	jsonData := []byte(`{"name": null, "age": 25}`)
-	result, err := extractor.Extract(jsonData, "name")
+	result, err := extractor.Extract(jsonData, testFieldName)
 	assert.NoError(t, err)
 	assert.Nil(t, result)
 }
@@ -100,26 +100,26 @@ func BenchmarkJSONFieldExtractor_Extract(b *testing.B) {
 	extractor := &JSONFieldExtractor{}
 
 	testData := map[string]interface{}{
-		"name":     "Alice",
-		"age":      25,
-		"city":     "New York",
-		"active":   true,
-		"score":    95.5,
-		"tags":     []string{"developer", "golang"},
-		"metadata": map[string]interface{}{"version": "1.0", "env": "prod"},
+		testFieldName: "Alice",
+		testFieldAge:  25,
+		"city":        "New York",
+		"active":      true,
+		"score":       95.5,
+		"tags":        []string{"developer", "golang"},
+		"metadata":    map[string]interface{}{"version": "1.0", "env": "prod"},
 	}
 
 	jsonData, _ := json.Marshal(testData)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = extractor.Extract(jsonData, "name")
+		_, _ = extractor.Extract(jsonData, testFieldName)
 	}
 }
 
 func BenchmarkFieldQuery_Validate(b *testing.B) {
 	query := FieldQuery{
-		Field:    "age",
+		Field:    testFieldAge,
 		Operator: "=",
 		Value:    25,
 	}

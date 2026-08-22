@@ -11,13 +11,13 @@ func TestSystemServiceIntegration(t *testing.T) {
 	// Create temporary directory for test
 	tmpDir, err := os.MkdirTemp("", "freyja_system_integration")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	t.Run("SystemService lifecycle", func(t *testing.T) {
 		// Create system service
 		config := SystemConfig{
 			DataDir:          tmpDir,
-			EncryptionKey:    "12345678901234567890123456789012",
+			EncryptionKey:    testEncryptionKey,
 			EnableEncryption: true,
 		}
 

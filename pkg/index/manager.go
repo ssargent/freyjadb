@@ -55,7 +55,7 @@ func (idx *SecondaryIndex) Search(fieldValue interface{}) ([][]byte, error) {
 	defer idx.mutex.RUnlock()
 
 	fieldPrefix := idx.createFieldPrefix(fieldValue)
-	return idx.searchWithPrefix(fieldPrefix)
+	return idx.searchWithPrefix(fieldPrefix), nil
 }
 
 // SearchRange finds records within a field value range
@@ -79,7 +79,7 @@ func (idx *SecondaryIndex) SearchRange(startValue, endValue interface{}) ([][]by
 		endPrefix = nil // No upper bound
 	}
 
-	return idx.searchRangeWithPrefixes(startPrefix, endPrefix)
+	return idx.searchRangeWithPrefixes(startPrefix, endPrefix), nil
 }
 
 // Save persists the index to disk
@@ -135,14 +135,14 @@ func (idx *SecondaryIndex) createFieldPrefix(fieldValue interface{}) []byte {
 func (idx *SecondaryIndex) serializeValue(buf *bytes.Buffer, value interface{}) {
 	switch v := value.(type) {
 	case int:
-		buf.WriteByte(0) // Type marker for int
-		binary.Write(buf, binary.BigEndian, int64(v))
+		buf.WriteByte(0)                                  // Type marker for int
+		_ = binary.Write(buf, binary.BigEndian, int64(v)) // Ignore error for buffer write
 	case int64:
 		buf.WriteByte(0)
-		binary.Write(buf, binary.BigEndian, v)
+		_ = binary.Write(buf, binary.BigEndian, v) // Ignore error for buffer write
 	case float64:
-		buf.WriteByte(1) // Type marker for float64
-		binary.Write(buf, binary.BigEndian, v)
+		buf.WriteByte(1)                           // Type marker for float64
+		_ = binary.Write(buf, binary.BigEndian, v) // Ignore error for buffer write
 	case string:
 		buf.WriteByte(2) // Type marker for string
 		buf.WriteString(v)
@@ -156,7 +156,7 @@ func (idx *SecondaryIndex) serializeValue(buf *bytes.Buffer, value interface{}) 
 }
 
 // searchWithPrefix finds all primary keys with the given field value prefix
-func (idx *SecondaryIndex) searchWithPrefix(prefix []byte) ([][]byte, error) {
+func (idx *SecondaryIndex) searchWithPrefix(prefix []byte) [][]byte {
 	var results [][]byte
 
 	// For exact match, we need to find all keys that start with the prefix
@@ -170,11 +170,11 @@ func (idx *SecondaryIndex) searchWithPrefix(prefix []byte) ([][]byte, error) {
 		return true // continue scanning
 	})
 
-	return results, nil
+	return results
 }
 
 // searchRangeWithPrefixes finds all primary keys within the field value range
-func (idx *SecondaryIndex) searchRangeWithPrefixes(startPrefix, endPrefix []byte) ([][]byte, error) {
+func (idx *SecondaryIndex) searchRangeWithPrefixes(startPrefix, endPrefix []byte) [][]byte {
 	var results [][]byte
 
 	// If endPrefix is nil, scan from startPrefix to the end
@@ -191,7 +191,7 @@ func (idx *SecondaryIndex) searchRangeWithPrefixes(startPrefix, endPrefix []byte
 		return true // continue scanning
 	})
 
-	return results, nil
+	return results
 }
 
 // treeRangeScan performs a range scan on the B+tree using leaf node traversal

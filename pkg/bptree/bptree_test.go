@@ -84,7 +84,7 @@ func TestBPlusTree_SaveLoad(t *testing.T) {
 
 	// Save to file
 	filename := "/tmp/bptree_test.dat"
-	defer os.Remove(filename)
+	defer func() { _ = os.Remove(filename) }() // Ignore error in cleanup
 
 	if err := tree.Save(filename); err != nil {
 		t.Fatalf("Failed to save tree: %v", err)
@@ -121,7 +121,7 @@ func TestBPlusTree_SaveLoadEmpty(t *testing.T) {
 	tree := NewBPlusTree(5)
 
 	filename := "/tmp/bptree_empty_test.dat"
-	defer os.Remove(filename)
+	defer func() { _ = os.Remove(filename) }() // Ignore error in cleanup
 
 	if err := tree.Save(filename); err != nil {
 		t.Fatalf("Failed to save empty tree: %v", err)

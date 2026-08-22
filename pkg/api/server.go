@@ -34,35 +34,9 @@ func StartServer(store IKVStore, config ServerConfig) error {
 	// Initialize metrics
 	metrics := NewMetrics()
 
-	// Initialize system service
-	systemConfig := SystemConfig{
-		DataDir:          config.SystemDataDir,
-		EncryptionKey:    config.SystemEncryptionKey,
-		EnableEncryption: config.EnableEncryption,
-	}
-	systemService, err := NewSystemService(systemConfig)
+	systemService, err := newConfiguredSystemService(config)
 	if err != nil {
-		return fmt.Errorf("failed to create system service: %w", err)
-	}
-
-	// Open system service
-	if err := systemService.Open(); err != nil {
-		return fmt.Errorf("failed to open system service: %w", err)
-	}
-
-	// Initialize system API key if provided
-	if config.SystemKey != "" {
-		systemAPIKey := APIKey{
-			ID:          "system-root",
-			Key:         config.SystemKey,
-			Description: "System root API key for administrative operations",
-			CreatedAt:   time.Now(),
-			IsActive:    true,
-		}
-
-		if err := systemService.StoreAPIKey(systemAPIKey); err != nil {
-			return fmt.Errorf("failed to store system API key: %w", err)
-		}
+		return err
 	}
 
 	server := NewServer(store, systemService, config, metrics)
@@ -86,56 +60,137 @@ func StartServer(store IKVStore, config ServerConfig) error {
 
 	// API key authentication middleware for protected routes
 	r.Route("/api/v1", func(r chi.Router) {
-		// Use system service for authentication if available, otherwise fall back to config
-		if systemService.IsOpen() {
-			r.Use(metrics.InstrumentAuthMiddleware(systemApiKeyMiddleware(systemService)))
-		} else {
-			r.Use(metrics.InstrumentAuthMiddleware(apiKeyMiddleware(config.APIKey)))
-		}
-
-		// Health check
-		r.Get("/health", metrics.InstrumentHandler("GET", "/api/v1/health", server.handleHealth))
-
-		// KV operations
-		r.Put("/kv/{key}", metrics.InstrumentHandler("PUT", "/api/v1/kv/{key}", server.handlePut))
-		r.Get("/kv/{key}", metrics.InstrumentHandler("GET", "/api/v1/kv/{key}", server.handleGet))
-		r.Delete("/kv/{key}", metrics.InstrumentHandler("DELETE", "/api/v1/kv/{key}", server.handleDelete))
-		r.Get("/kv", metrics.InstrumentHandler("GET", "/api/v1/kv", server.handleListKeys))
-
-		// Relationships
-		r.Post("/relationships", metrics.InstrumentHandler("POST", "/api/v1/relationships", server.handleCreateRelationship))
-		r.Delete("/relationships", metrics.InstrumentHandler("DELETE",
-			"/api/v1/relationships", server.handleDeleteRelationship))
-		r.Get("/relationships", metrics.InstrumentHandler("GET", "/api/v1/relationships", server.handleGetRelationships))
-
-		// Diagnostics
-		r.Get("/explain", metrics.InstrumentHandler("GET", "/api/v1/explain", server.handleExplain))
-		r.Get("/stats", metrics.InstrumentHandler("GET", "/api/v1/stats", server.handleStats))
-
-		// System administration endpoints (require system API key)
-		r.Route("/system", func(r chi.Router) {
-			r.Use(metrics.InstrumentAuthMiddleware(systemApiKeyMiddleware(systemService)))
-
-			// API key management
-			r.Post("/api-keys", metrics.InstrumentHandler("POST", "/api/v1/system/api-keys", server.handleCreateAPIKey))
-			r.Get("/api-keys", metrics.InstrumentHandler("GET", "/api/v1/system/api-keys", server.handleListAPIKeys))
-			r.Get("/api-keys/{id}", metrics.InstrumentHandler("GET", "/api/v1/system/api-keys/{id}", server.handleGetAPIKey))
-			r.Delete("/api-keys/{id}", metrics.InstrumentHandler("DELETE",
-				"/api/v1/system/api-keys/{id}", server.handleDeleteAPIKey))
-
-			// System configuration
-			r.Get("/config/{key}", metrics.InstrumentHandler("GET", "/api/v1/system/config/{key}", server.handleGetSystemConfig))
-			r.Put("/config/{key}", metrics.InstrumentHandler("PUT", "/api/v1/system/config/{key}", server.handleSetSystemConfig))
-		})
+		registerAPIRoutes(r, server, metrics, systemService, config)
 	})
 
 	// Swagger documentation (unprotected)
-	r.Get("/swagger/*", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		if path == "/swagger/" || path == "/swagger/index.html" {
-			// Serve the Swagger UI HTML
-			w.Header().Set("Content-Type", "text/html")
-			html := `<!DOCTYPE html>
+	r.Get("/swagger/*", swaggerHandler())
+
+	// Start background metrics updater
+	go server.startMetricsUpdater()
+
+	addr := fmt.Sprintf(":%d", config.Port)
+	fmt.Printf("Starting FreyjaDB REST API server on %s\n", addr)
+	fmt.Printf("Metrics available at: http://localhost:%d/metrics\n", config.Port)
+
+	// Create HTTP server with timeouts
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      r,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	log.Fatal(srv.ListenAndServe())
+
+	return nil
+}
+
+// newConfiguredSystemService builds and opens the SystemService described by
+// config, seeding the system root API key when one is provided.
+func newConfiguredSystemService(config ServerConfig) (*SystemService, error) {
+	systemConfig := SystemConfig{
+		DataDir:          config.SystemDataDir,
+		EncryptionKey:    config.SystemEncryptionKey,
+		EnableEncryption: config.EnableEncryption,
+	}
+
+	systemService, err := NewSystemService(systemConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create system service: %w", err)
+	}
+
+	if err := systemService.Open(); err != nil {
+		return nil, fmt.Errorf("failed to open system service: %w", err)
+	}
+
+	if config.SystemKey != "" {
+		systemAPIKey := APIKey{
+			ID:          "system-root",
+			Key:         config.SystemKey,
+			Description: "System root API key for administrative operations",
+			CreatedAt:   time.Now(),
+			IsActive:    true,
+		}
+
+		if err := systemService.StoreAPIKey(systemAPIKey); err != nil {
+			return nil, fmt.Errorf("failed to store system API key: %w", err)
+		}
+	}
+
+	return systemService, nil
+}
+
+// registerAPIRoutes wires up all /api/v1 routes (KV, relationships,
+// diagnostics, and system administration) onto r.
+func registerAPIRoutes(
+	r chi.Router, server *Server, metrics *Metrics, systemService *SystemService, config ServerConfig,
+) {
+	// Use system service for authentication if available, otherwise fall back to config
+	if systemService.IsOpen() {
+		r.Use(metrics.InstrumentAuthMiddleware(systemApiKeyMiddleware(systemService)))
+	} else {
+		r.Use(metrics.InstrumentAuthMiddleware(apiKeyMiddleware(config.APIKey)))
+	}
+
+	// Health check
+	r.Get("/health", metrics.InstrumentHandler("GET", "/api/v1/health", server.handleHealth))
+
+	// KV operations
+	r.Put("/kv/{key}", metrics.InstrumentHandler("PUT", "/api/v1/kv/{key}", server.handlePut))
+	r.Get("/kv/{key}", metrics.InstrumentHandler("GET", "/api/v1/kv/{key}", server.handleGet))
+	r.Delete("/kv/{key}", metrics.InstrumentHandler("DELETE", "/api/v1/kv/{key}", server.handleDelete))
+	r.Get("/kv", metrics.InstrumentHandler("GET", "/api/v1/kv", server.handleListKeys))
+
+	// Relationships
+	r.Post("/relationships", metrics.InstrumentHandler("POST", "/api/v1/relationships", server.handleCreateRelationship))
+	r.Delete("/relationships", metrics.InstrumentHandler("DELETE",
+		"/api/v1/relationships", server.handleDeleteRelationship))
+	r.Get("/relationships", metrics.InstrumentHandler("GET", "/api/v1/relationships", server.handleGetRelationships))
+
+	// Diagnostics
+	r.Get("/explain", metrics.InstrumentHandler("GET", "/api/v1/explain", server.handleExplain))
+	r.Get("/stats", metrics.InstrumentHandler("GET", "/api/v1/stats", server.handleStats))
+
+	// System administration endpoints (require system API key)
+	r.Route("/system", func(r chi.Router) {
+		r.Use(metrics.InstrumentAuthMiddleware(systemApiKeyMiddleware(systemService)))
+
+		// API key management
+		r.Post("/api-keys", metrics.InstrumentHandler("POST", "/api/v1/system/api-keys", server.handleCreateAPIKey))
+		r.Get("/api-keys", metrics.InstrumentHandler("GET", "/api/v1/system/api-keys", server.handleListAPIKeys))
+		r.Get("/api-keys/{id}", metrics.InstrumentHandler("GET", "/api/v1/system/api-keys/{id}", server.handleGetAPIKey))
+		r.Delete("/api-keys/{id}", metrics.InstrumentHandler("DELETE",
+			"/api/v1/system/api-keys/{id}", server.handleDeleteAPIKey))
+
+		// System configuration
+		r.Get("/config/{key}", metrics.InstrumentHandler("GET", "/api/v1/system/config/{key}", server.handleGetSystemConfig))
+		r.Put("/config/{key}", metrics.InstrumentHandler("PUT", "/api/v1/system/config/{key}", server.handleSetSystemConfig))
+	})
+}
+
+// swaggerHandler serves the Swagger UI page and the generated Swagger
+// JSON/YAML documents under /swagger/*.
+func swaggerHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/swagger/", "/swagger/index.html":
+			serveSwaggerUI(w)
+		case "/swagger/swagger.json":
+			serveSwaggerDoc(w, ContentTypeJSONHeader)
+		case "/swagger/swagger.yaml":
+			serveSwaggerDoc(w, "application/yaml")
+		default:
+			http.NotFound(w, r)
+		}
+	}
+}
+
+// serveSwaggerUI writes the static Swagger UI HTML page.
+func serveSwaggerUI(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html")
+	html := `<!DOCTYPE html>
 <html>
 <head>
 		<title>FreyjaDB API Documentation</title>
@@ -158,67 +213,25 @@ func StartServer(store IKVStore, config ServerConfig) error {
 		</script>
 </body>
 </html>`
-			if _, err := w.Write([]byte(html)); err != nil {
-				http.Error(w, "Failed to write response", http.StatusInternalServerError)
-				return
-			}
-			return
-		}
-
-		if path == "/swagger/swagger.json" {
-			// Serve the dynamically generated Swagger JSON
-			doc, err := swag.ReadDoc("swagger")
-			if err != nil {
-				fmt.Printf("Error generating swagger doc: %v\n", err)
-				http.Error(w, "Failed to generate Swagger documentation", 500)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			if _, err := w.Write([]byte(doc)); err != nil {
-				http.Error(w, "Failed to write response", http.StatusInternalServerError)
-				return
-			}
-			return
-		}
-
-		if path == "/swagger/swagger.yaml" {
-			// Serve the dynamically generated Swagger YAML
-			doc, err := swag.ReadDoc("swagger")
-			if err != nil {
-				fmt.Printf("Error generating swagger doc: %v\n", err)
-				http.Error(w, "Failed to generate Swagger documentation", 500)
-				return
-			}
-			w.Header().Set("Content-Type", "application/yaml")
-			if _, err := w.Write([]byte(doc)); err != nil {
-				// Note: This serves JSON as YAML, for true YAML conversion you'd need a JSON to YAML converter
-				http.Error(w, "Failed to write response", http.StatusInternalServerError)
-				return
-			}
-			return
-		}
-
-		// For any other paths, return 404
-		http.NotFound(w, r)
-	})
-
-	// Start background metrics updater
-	go server.startMetricsUpdater()
-
-	addr := fmt.Sprintf(":%d", config.Port)
-	fmt.Printf("Starting FreyjaDB REST API server on %s\n", addr)
-	fmt.Printf("Metrics available at: http://localhost:%d/metrics\n", config.Port)
-
-	// Create HTTP server with timeouts
-	srv := &http.Server{
-		Addr:         addr,
-		Handler:      r,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+	if _, err := w.Write([]byte(html)); err != nil {
+		http.Error(w, "Failed to write response", http.StatusInternalServerError)
 	}
+}
 
-	log.Fatal(srv.ListenAndServe())
-
-	return nil
+// serveSwaggerDoc writes the dynamically generated Swagger document using
+// the given Content-Type (application/json or application/yaml).
+//
+// Note: for the YAML case this serves the JSON document as-is; true YAML
+// conversion would require a JSON-to-YAML converter.
+func serveSwaggerDoc(w http.ResponseWriter, contentType string) {
+	doc, err := swag.ReadDoc("swagger")
+	if err != nil {
+		fmt.Printf("Error generating swagger doc: %v\n", err)
+		http.Error(w, "Failed to generate Swagger documentation", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", contentType)
+	if _, err := w.Write([]byte(doc)); err != nil {
+		http.Error(w, "Failed to write response", http.StatusInternalServerError)
+	}
 }

@@ -15,7 +15,7 @@ func TestUpCommand(t *testing.T) {
 	// Create temporary directory for test
 	tmpDir, err := os.MkdirTemp("", "freyja_up_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	dataDir := filepath.Join(tmpDir, "data")
 	configPath := filepath.Join(tmpDir, "config.yaml")
@@ -46,7 +46,7 @@ func TestUpCommand(t *testing.T) {
 		existingConfig := &config.Config{
 			DataDir: dataDir,
 			Port:    9000,
-			Bind:    "0.0.0.0",
+			Bind:    testBindAddressAll,
 			Security: config.Security{
 				SystemKey:    "existing-system-key",
 				SystemAPIKey: "existing-system-api-key",
@@ -75,14 +75,14 @@ func TestUpCommand(t *testing.T) {
 		cfg := &config.Config{
 			DataDir: dataDir,
 			Port:    8080,
-			Bind:    "127.0.0.1",
+			Bind:    config.DefaultBindAddress,
 			Security: config.Security{
-				SystemKey:    "test-system-key-1234567890123456",
-				SystemAPIKey: "test-system-api-key-1234567890123456",
-				ClientAPIKey: "test-client-api-key-1234567890123456",
+				SystemKey:    testSystemKey,
+				SystemAPIKey: testSystemAPIKey,
+				ClientAPIKey: testClientAPIKey,
 			},
 			Logging: config.Logging{
-				Level: "info",
+				Level: testLogLevelInfo,
 			},
 		}
 
@@ -108,14 +108,14 @@ func TestUpCommand(t *testing.T) {
 		cfg := &config.Config{
 			DataDir: dataDir,
 			Port:    8080,
-			Bind:    "127.0.0.1",
+			Bind:    config.DefaultBindAddress,
 			Security: config.Security{
-				SystemKey:    "test-system-key-1234567890123456",
-				SystemAPIKey: "test-system-api-key-1234567890123456",
-				ClientAPIKey: "test-client-api-key-1234567890123456",
+				SystemKey:    testSystemKey,
+				SystemAPIKey: testSystemAPIKey,
+				ClientAPIKey: testClientAPIKey,
 			},
 			Logging: config.Logging{
-				Level: "info",
+				Level: testLogLevelInfo,
 			},
 		}
 
@@ -137,14 +137,14 @@ func TestUpCommand(t *testing.T) {
 		cfg := &config.Config{
 			DataDir: "/invalid/path/that/does/not/exist",
 			Port:    8080,
-			Bind:    "127.0.0.1",
+			Bind:    config.DefaultBindAddress,
 			Security: config.Security{
-				SystemKey:    "test-system-key-1234567890123456",
-				SystemAPIKey: "test-system-api-key-1234567890123456",
-				ClientAPIKey: "test-client-api-key-1234567890123456",
+				SystemKey:    testSystemKey,
+				SystemAPIKey: testSystemAPIKey,
+				ClientAPIKey: testClientAPIKey,
 			},
 			Logging: config.Logging{
-				Level: "info",
+				Level: testLogLevelInfo,
 			},
 		}
 
@@ -176,22 +176,22 @@ func TestConfigOverride(t *testing.T) {
 	// Test that command line flags override config values
 	tmpDir, err := os.MkdirTemp("", "freyja_override_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	configPath := filepath.Join(tmpDir, "config.yaml")
 
 	// Create base config
 	baseConfig := &config.Config{
-		DataDir: "./data",
+		DataDir: defaultDataDir,
 		Port:    8080,
-		Bind:    "127.0.0.1",
+		Bind:    config.DefaultBindAddress,
 		Security: config.Security{
 			SystemKey:    "base-system-key",
 			SystemAPIKey: "base-system-api-key",
 			ClientAPIKey: "base-client-api-key",
 		},
 		Logging: config.Logging{
-			Level: "info",
+			Level: testLogLevelInfo,
 		},
 	}
 
@@ -205,7 +205,7 @@ func TestConfigOverride(t *testing.T) {
 	// Simulate flag overrides
 	customDataDir := "/custom/data/dir"
 	customPort := 9000
-	customBind := "0.0.0.0"
+	customBind := testBindAddressAll
 
 	if customDataDir != "" {
 		loadedConfig.DataDir = customDataDir
@@ -213,7 +213,7 @@ func TestConfigOverride(t *testing.T) {
 	if customPort != 8080 {
 		loadedConfig.Port = customPort
 	}
-	if customBind != "127.0.0.1" {
+	if customBind != config.DefaultBindAddress {
 		loadedConfig.Bind = customBind
 	}
 
@@ -248,15 +248,15 @@ func TestUpCommandFlagHandling(t *testing.T) {
 	t.Run("flag override logic", func(t *testing.T) {
 		// Test the flag override logic from the Run function
 		cfg := &config.Config{
-			DataDir: "./data",
+			DataDir: defaultDataDir,
 			Port:    8080,
-			Bind:    "127.0.0.1",
+			Bind:    config.DefaultBindAddress,
 		}
 
 		// Simulate flag values
 		dataDir := "/flag/data/dir"
 		port := 9000
-		bind := "0.0.0.0"
+		bind := testBindAddressAll
 
 		// Apply overrides (same logic as in Run function)
 		if dataDir != "" {
@@ -265,13 +265,13 @@ func TestUpCommandFlagHandling(t *testing.T) {
 		if port != 8080 {
 			cfg.Port = port
 		}
-		if bind != "127.0.0.1" {
+		if bind != config.DefaultBindAddress {
 			cfg.Bind = bind
 		}
 
 		assert.Equal(t, "/flag/data/dir", cfg.DataDir)
 		assert.Equal(t, 9000, cfg.Port)
-		assert.Equal(t, "0.0.0.0", cfg.Bind)
+		assert.Equal(t, testBindAddressAll, cfg.Bind)
 	})
 
 	t.Run("no overrides", func(t *testing.T) {
@@ -279,13 +279,13 @@ func TestUpCommandFlagHandling(t *testing.T) {
 		cfg := &config.Config{
 			DataDir: "/config/data",
 			Port:    8080,
-			Bind:    "127.0.0.1",
+			Bind:    config.DefaultBindAddress,
 		}
 
 		// Simulate empty/default flag values
 		dataDir := ""
 		port := 8080
-		bind := "127.0.0.1"
+		bind := config.DefaultBindAddress
 
 		// Apply overrides
 		if dataDir != "" {
@@ -294,21 +294,21 @@ func TestUpCommandFlagHandling(t *testing.T) {
 		if port != 8080 {
 			cfg.Port = port
 		}
-		if bind != "127.0.0.1" {
+		if bind != config.DefaultBindAddress {
 			cfg.Bind = bind
 		}
 
 		// Should remain unchanged
 		assert.Equal(t, "/config/data", cfg.DataDir)
 		assert.Equal(t, 8080, cfg.Port)
-		assert.Equal(t, "127.0.0.1", cfg.Bind)
+		assert.Equal(t, config.DefaultBindAddress, cfg.Bind)
 	})
 }
 
 func TestUpCommandErrorHandling(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "freyja_error_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	t.Run("invalid config file", func(t *testing.T) {
 		// Create invalid config file

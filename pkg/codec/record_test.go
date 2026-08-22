@@ -86,16 +86,19 @@ func TestRecordCodec_EncodeDecodeRoundTrip(t *testing.T) {
 			}
 
 			// Check sizes
+			//nolint:gosec // G115: test fixture key length is small and known, cannot overflow uint32
 			if record.KeySize != uint32(len(tc.key)) {
 				t.Errorf("KeySize mismatch: got %d, want %d", record.KeySize, len(tc.key))
 			}
 
+			//nolint:gosec // G115: test fixture value length is small and known, cannot overflow uint32
 			if record.ValueSize != uint32(len(tc.value)) {
 				t.Errorf("ValueSize mismatch: got %d, want %d", record.ValueSize, len(tc.value))
 			}
 
 			// Check timestamp is reasonable (within last minute)
 			now := time.Now().UnixNano()
+			//nolint:gosec // G115: time.Now().UnixNano() is always positive in practice, safe to convert
 			if record.Timestamp > uint64(now) || record.Timestamp < uint64(now-int64(time.Minute)) {
 				t.Errorf("Timestamp seems unreasonable: %d", record.Timestamp)
 			}
@@ -291,10 +294,12 @@ func TestNewRecord(t *testing.T) {
 	record := NewRecord(key, value)
 
 	// Check fields are set correctly
+	//nolint:gosec // G115: test fixture key length is small and known, cannot overflow uint32
 	if record.KeySize != uint32(len(key)) {
 		t.Errorf("KeySize mismatch: got %d, want %d", record.KeySize, len(key))
 	}
 
+	//nolint:gosec // G115: test fixture value length is small and known, cannot overflow uint32
 	if record.ValueSize != uint32(len(value)) {
 		t.Errorf("ValueSize mismatch: got %d, want %d", record.ValueSize, len(value))
 	}
@@ -309,6 +314,7 @@ func TestNewRecord(t *testing.T) {
 
 	// Check timestamp is reasonable
 	now := time.Now().UnixNano()
+	//nolint:gosec // G115: time.Now().UnixNano() is always positive in practice, safe to convert
 	if record.Timestamp > uint64(now) || record.Timestamp < uint64(now-int64(time.Second)) {
 		t.Errorf("Timestamp seems unreasonable: %d", record.Timestamp)
 	}

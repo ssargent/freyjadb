@@ -52,7 +52,7 @@ func systemApiKeyMiddleware(systemService *SystemService) func(http.Handler) htt
 
 // sendSuccess sends a successful JSON response
 func sendSuccess(w http.ResponseWriter, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", ContentTypeJSONHeader)
 	response := APIResponse{
 		Success: true,
 		Data:    data,
@@ -63,7 +63,7 @@ func sendSuccess(w http.ResponseWriter, data interface{}) {
 
 // sendError sends an error JSON response
 func sendError(w http.ResponseWriter, message string, statusCode int) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", ContentTypeJSONHeader)
 	w.WriteHeader(statusCode)
 	response := APIResponse{
 		Success: false,

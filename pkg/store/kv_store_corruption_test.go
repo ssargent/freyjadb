@@ -53,7 +53,7 @@ func testImmediateReadAfterWrite(t *testing.T) {
 
 	_, err = store.Open()
 	assert.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }() // Ignore error in cleanup
 
 	// Test multiple immediate read-after-write scenarios
 	testCases := []struct {
@@ -85,7 +85,7 @@ func testImmediateReadAfterWrite(t *testing.T) {
 func testConcurrentReadWrite(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "kv_corruption_concurrent")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
@@ -97,7 +97,7 @@ func testConcurrentReadWrite(t *testing.T) {
 
 	_, err = store.Open()
 	assert.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }() // Ignore error in cleanup
 
 	const numGoroutines = 10
 	const numOperations = 50
@@ -155,7 +155,7 @@ func testConcurrentReadWrite(t *testing.T) {
 func testBufferStateConsistency(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "kv_corruption_buffer")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
@@ -167,7 +167,7 @@ func testBufferStateConsistency(t *testing.T) {
 
 	_, err = store.Open()
 	assert.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }() // Ignore error in cleanup
 
 	// Write a series of records
 	const numRecords = 100
@@ -178,8 +178,8 @@ func testBufferStateConsistency(t *testing.T) {
 		keys[i] = fmt.Sprintf("buffer_test_key_%d", i)
 		values[i] = fmt.Sprintf("buffer_test_value_%d_with_some_extra_data_to_make_it_longer", i)
 
-		err := store.Put([]byte(keys[i]), []byte(values[i]))
-		assert.NoError(t, err, "Failed to write record %d", i)
+		putErr := store.Put([]byte(keys[i]), []byte(values[i]))
+		assert.NoError(t, putErr, "Failed to write record %d", i)
 	}
 
 	// Force sync to ensure all data is on disk
@@ -205,7 +205,7 @@ func testBufferStateConsistency(t *testing.T) {
 func testOffsetCalculationAccuracy(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "kv_corruption_offset")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
@@ -217,7 +217,7 @@ func testOffsetCalculationAccuracy(t *testing.T) {
 
 	_, err = store.Open()
 	assert.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }() // Ignore error in cleanup
 
 	// Test with various data sizes to check offset calculations
 	testSizes := []int{1, 10, 100, 1000, 10000}
@@ -244,7 +244,7 @@ func testOffsetCalculationAccuracy(t *testing.T) {
 func testFileHandleSynchronization(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "kv_corruption_handles")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
@@ -256,7 +256,7 @@ func testFileHandleSynchronization(t *testing.T) {
 
 	_, err = store.Open()
 	assert.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }() // Ignore error in cleanup
 
 	// Test multiple open/close cycles
 	for cycle := 0; cycle < 5; cycle++ {
@@ -284,7 +284,7 @@ func testFileHandleSynchronization(t *testing.T) {
 func testReaderWriterRaceCondition(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "kv_corruption_race")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	config := KVStoreConfig{
 		DataDir:       tmpDir,
@@ -296,7 +296,7 @@ func testReaderWriterRaceCondition(t *testing.T) {
 
 	_, err = store.Open()
 	assert.NoError(t, err)
-	defer store.Close()
+	defer func() { _ = store.Close() }() // Ignore error in cleanup
 
 	const numOperations = 100
 	done := make(chan bool, 2)

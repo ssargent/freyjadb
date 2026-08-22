@@ -97,7 +97,7 @@ func TestSecondaryIndex_SaveLoad(t *testing.T) {
 	// Create temporary directory
 	tmpDir, err := os.MkdirTemp("", "index_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	// Save index
 	err = idx.Save(tmpDir)
@@ -121,7 +121,7 @@ func TestSecondaryIndex_LoadNonExistent(t *testing.T) {
 
 	tmpDir, err := os.MkdirTemp("", "index_empty_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	// Loading from non-existent directory should not error
 	err = idx.Load(tmpDir)
@@ -187,7 +187,7 @@ func TestIndexManager_SaveLoadAll(t *testing.T) {
 	// Create temporary directory
 	tmpDir, err := os.MkdirTemp("", "manager_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	// Save all indexes
 	err = manager.SaveAll(tmpDir)
@@ -211,7 +211,7 @@ func TestIndexManager_LoadAll_EmptyDirectory(t *testing.T) {
 
 	tmpDir, err := os.MkdirTemp("", "manager_empty_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	// Loading from empty directory should not error
 	err = manager.LoadAll(tmpDir)

@@ -46,7 +46,7 @@ func NewMetrics() *Metrics {
 				Name: "freyja_http_requests_total",
 				Help: "Total number of HTTP requests",
 			},
-			[]string{"method", "endpoint", "status_code"},
+			[]string{labelMethod, labelEndpoint, "status_code"},
 		),
 
 		httpRequestDuration: promauto.NewHistogramVec(
@@ -55,7 +55,7 @@ func NewMetrics() *Metrics {
 				Help:    "HTTP request duration in seconds",
 				Buckets: prometheus.DefBuckets,
 			},
-			[]string{"method", "endpoint"},
+			[]string{labelMethod, labelEndpoint},
 		),
 
 		httpRequestsInFlight: promauto.NewGaugeVec(
@@ -63,7 +63,7 @@ func NewMetrics() *Metrics {
 				Name: "freyja_http_requests_in_flight",
 				Help: "Number of HTTP requests currently being processed",
 			},
-			[]string{"method", "endpoint"},
+			[]string{labelMethod, labelEndpoint},
 		),
 
 		// Database operation metrics
@@ -72,7 +72,7 @@ func NewMetrics() *Metrics {
 				Name: "freyja_db_operations_total",
 				Help: "Total number of database operations",
 			},
-			[]string{"operation", "status"},
+			[]string{labelOperation, fieldStatus},
 		),
 
 		dbOperationDuration: promauto.NewHistogramVec(
@@ -81,7 +81,7 @@ func NewMetrics() *Metrics {
 				Help:    "Database operation duration in seconds",
 				Buckets: prometheus.DefBuckets,
 			},
-			[]string{"operation"},
+			[]string{labelOperation},
 		),
 
 		dbKeysTotal: promauto.NewGauge(
@@ -104,7 +104,7 @@ func NewMetrics() *Metrics {
 				Name: "freyja_auth_requests_total",
 				Help: "Total number of authentication requests",
 			},
-			[]string{"status"},
+			[]string{fieldStatus},
 		),
 
 		// Relationship metrics
@@ -113,7 +113,7 @@ func NewMetrics() *Metrics {
 				Name: "freyja_relationship_operations_total",
 				Help: "Total number of relationship operations",
 			},
-			[]string{"operation", "status"},
+			[]string{labelOperation, fieldStatus},
 		),
 
 		// Health check metrics
@@ -122,7 +122,7 @@ func NewMetrics() *Metrics {
 				Name: "freyja_health_checks_total",
 				Help: "Total number of health checks",
 			},
-			[]string{"status"},
+			[]string{fieldStatus},
 		),
 	}
 

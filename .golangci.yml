@@ -3,6 +3,10 @@ version: "2"
 run:
   timeout: 5m
 
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
 linters:
   enable:
     - govet
@@ -27,9 +31,28 @@ linters:
     - nolintlint
     - rowserrcheck
     - whitespace
-    - depguard
     - dogsled
     - dupl
+  disable:
+    - depguard
+  settings:
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    gocyclo:
+      min-complexity: 15
+    lll:
+      line-length: 120
+    govet:
+      enable:
+        - shadow
+    errcheck:
+      exclude-functions:
+        - fmt.Fprintln
+        - fmt.Fprintf
+    gosec:
+      excludes:
+        - G104 # Errors unhandled
 
 formatters:
   enable:

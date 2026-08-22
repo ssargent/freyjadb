@@ -117,7 +117,9 @@ Examples:
 			fmt.Printf("Are you sure you want to delete the relationship %s:%s --[%s]--> %s:%s? (y/N): ",
 				fromType, fromID, relation, toType, toID)
 			var response string
-			fmt.Scanln(&response)
+			if _, scanErr := fmt.Scanln(&response); scanErr != nil {
+				return fmt.Errorf("failed to read response: %w", scanErr)
+			}
 			if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
 				fmt.Println("Deletion cancelled")
 				return nil
@@ -158,6 +160,7 @@ func parseEntitySpec(spec string) (EntityType, string, error) {
 	}
 }
 
+//nolint:gochecknoinits // cobra requires init() to register subcommands
 func init() {
 	// Add subcommands
 	relationshipCmd.AddCommand(relationshipCreateCmd)

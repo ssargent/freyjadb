@@ -13,7 +13,7 @@ func TestSystemService(t *testing.T) {
 	t.Run("NewSystemService", func(t *testing.T) {
 		tmpDir, err := os.MkdirTemp("", "freyja_system_test_new")
 		assert.NoError(t, err)
-		defer os.RemoveAll(tmpDir)
+		defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 		config := SystemConfig{
 			DataDir:          tmpDir,
@@ -30,7 +30,7 @@ func TestSystemService(t *testing.T) {
 	t.Run("Open and Close", func(t *testing.T) {
 		tmpDir, err := os.MkdirTemp("", "freyja_system_test_open")
 		assert.NoError(t, err)
-		defer os.RemoveAll(tmpDir)
+		defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 		config := SystemConfig{
 			DataDir:          tmpDir,
@@ -55,17 +55,17 @@ func TestSystemService(t *testing.T) {
 	t.Run("API Key Management", func(t *testing.T) {
 		tmpDir, err := os.MkdirTemp("", "freyja_system_test_api")
 		assert.NoError(t, err)
-		defer os.RemoveAll(tmpDir)
+		defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 		config := SystemConfig{
 			DataDir:          tmpDir,
-			EncryptionKey:    "12345678901234567890123456789012", // 32 bytes for AES-256
+			EncryptionKey:    testEncryptionKey, // 32 bytes for AES-256
 			EnableEncryption: true,
 		}
 
 		service, err := NewSystemService(config)
 		assert.NoError(t, err)
-		defer service.Close()
+		defer func() { _ = service.Close() }() // Ignore error in cleanup
 
 		err = service.Open()
 		assert.NoError(t, err)
@@ -74,7 +74,7 @@ func TestSystemService(t *testing.T) {
 		apiKey := APIKey{
 			ID:          "test-key-1",
 			Key:         "secret123",
-			Description: "Test API key",
+			Description: testAPIKeyDescription,
 			CreatedAt:   time.Now(),
 			IsActive:    true,
 		}
@@ -89,7 +89,7 @@ func TestSystemService(t *testing.T) {
 		assert.NotNil(t, retrieved)
 		assert.Equal(t, "test-key-1", retrieved.ID)
 		assert.Equal(t, "secret123", retrieved.Key)
-		assert.Equal(t, "Test API key", retrieved.Description)
+		assert.Equal(t, testAPIKeyDescription, retrieved.Description)
 		assert.True(t, retrieved.IsActive)
 
 		// Validate API key
@@ -125,7 +125,7 @@ func TestSystemService(t *testing.T) {
 	t.Run("System Config Management", func(t *testing.T) {
 		tmpDir, err := os.MkdirTemp("", "freyja_system_test_config")
 		assert.NoError(t, err)
-		defer os.RemoveAll(tmpDir)
+		defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 		config := SystemConfig{
 			DataDir:          tmpDir,
@@ -135,7 +135,7 @@ func TestSystemService(t *testing.T) {
 
 		service, err := NewSystemService(config)
 		assert.NoError(t, err)
-		defer service.Close()
+		defer func() { _ = service.Close() }() // Ignore error in cleanup
 
 		err = service.Open()
 		assert.NoError(t, err)
@@ -159,17 +159,17 @@ func TestSystemService(t *testing.T) {
 	t.Run("Encryption", func(t *testing.T) {
 		tmpDir, err := os.MkdirTemp("", "freyja_system_test_encrypt")
 		assert.NoError(t, err)
-		defer os.RemoveAll(tmpDir)
+		defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 		config := SystemConfig{
 			DataDir:          tmpDir,
-			EncryptionKey:    "12345678901234567890123456789012", // 32 bytes for AES-256
+			EncryptionKey:    testEncryptionKey, // 32 bytes for AES-256
 			EnableEncryption: true,
 		}
 
 		service, err := NewSystemService(config)
 		assert.NoError(t, err)
-		defer service.Close()
+		defer func() { _ = service.Close() }() // Ignore error in cleanup
 
 		err = service.Open()
 		assert.NoError(t, err)
@@ -196,14 +196,14 @@ func TestSystemService(t *testing.T) {
 	t.Run("Key Derivation", func(t *testing.T) {
 		tmpDir, err := os.MkdirTemp("", "freyja_system_test_keyderiv")
 		assert.NoError(t, err)
-		defer os.RemoveAll(tmpDir)
+		defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 		// Test with various key lengths - all should work due to SHA-256 derivation
 		testKeys := []string{
-			"short",                            // 5 bytes
-			"cuddly-kitten",                    // 13 bytes (original failing case)
-			"medium-length-key-for-testing",    // 28 bytes
-			"12345678901234567890123456789012", // 32 bytes (exact)
+			"short",                         // 5 bytes
+			"cuddly-kitten",                 // 13 bytes (original failing case)
+			"medium-length-key-for-testing", // 28 bytes
+			testEncryptionKey,               // 32 bytes (exact)
 		}
 
 		for _, testKey := range testKeys {
@@ -216,7 +216,7 @@ func TestSystemService(t *testing.T) {
 
 				service, err := NewSystemService(config)
 				assert.NoError(t, err)
-				defer service.Close()
+				defer func() { _ = service.Close() }() // Ignore error in cleanup
 
 				err = service.Open()
 				assert.NoError(t, err)

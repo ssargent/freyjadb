@@ -26,56 +26,54 @@ func outputEntities(entities []*Entity) error {
 	return outputEntitiesTable(entities)
 }
 
+// entityTableField is a single label/value row rendered by outputEntityTable.
+type entityTableField struct {
+	label string
+	value string
+}
+
+// entityTableFields builds the ordered list of label/value rows to display
+// for an entity, omitting fields that are empty.
+func entityTableFields(entity *Entity) []entityTableField {
+	fields := []entityTableField{
+		{"ID", entity.ID},
+		{"Type", string(entity.Type)},
+		{"Name", entity.Name},
+	}
+
+	if len(entity.Aka) > 0 {
+		fields = append(fields, entityTableField{"AKA", formatStringSlice(entity.Aka)})
+	}
+	if entity.Summary != "" {
+		fields = append(fields, entityTableField{"Summary", entity.Summary})
+	}
+	if entity.Details != "" {
+		fields = append(fields, entityTableField{"Details", entity.Details})
+	}
+	if len(entity.Tags) > 0 {
+		fields = append(fields, entityTableField{"Tags", formatStringSlice(entity.Tags)})
+	}
+	if len(entity.Links) > 0 {
+		fields = append(fields, entityTableField{"Links", fmt.Sprintf("%d relationships", len(entity.Links))})
+	}
+
+	fields = append(fields,
+		entityTableField{"Created", entity.CreatedAt.Format(time.RFC3339)},
+		entityTableField{"Updated", entity.UpdatedAt.Format(time.RFC3339)},
+	)
+
+	return fields
+}
+
 // outputEntityTable displays a single entity in table format
 func outputEntityTable(entity *Entity) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	defer func() { _ = w.Flush() }()
 
-	if _, err := fmt.Fprintf(w, "ID:\t%s\n", entity.ID); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(w, "Type:\t%s\n", entity.Type); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(w, "Name:\t%s\n", entity.Name); err != nil {
-		return err
-	}
-
-	if len(entity.Aka) > 0 {
-		if _, err := fmt.Fprintf(w, "AKA:\t%s\n", formatStringSlice(entity.Aka)); err != nil {
+	for _, field := range entityTableFields(entity) {
+		if _, err := fmt.Fprintf(w, "%s:\t%s\n", field.label, field.value); err != nil {
 			return err
 		}
-	}
-
-	if entity.Summary != "" {
-		if _, err := fmt.Fprintf(w, "Summary:\t%s\n", entity.Summary); err != nil {
-			return err
-		}
-	}
-
-	if entity.Details != "" {
-		if _, err := fmt.Fprintf(w, "Details:\t%s\n", entity.Details); err != nil {
-			return err
-		}
-	}
-
-	if len(entity.Tags) > 0 {
-		if _, err := fmt.Fprintf(w, "Tags:\t%s\n", formatStringSlice(entity.Tags)); err != nil {
-			return err
-		}
-	}
-
-	if len(entity.Links) > 0 {
-		if _, err := fmt.Fprintf(w, "Links:\t%d relationships\n", len(entity.Links)); err != nil {
-			return err
-		}
-	}
-
-	if _, err := fmt.Fprintf(w, "Created:\t%s\n", entity.CreatedAt.Format(time.RFC3339)); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(w, "Updated:\t%s\n", entity.UpdatedAt.Format(time.RFC3339)); err != nil {
-		return err
 	}
 
 	return nil
@@ -91,7 +89,9 @@ func outputEntitiesTable(entities []*Entity) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	defer func() { _ = w.Flush() }()
 
-	fmt.Fprintln(w, "ID\tNAME\tTYPE\tSUMMARY\tTAGS\tUPDATED")
+	if _, err := fmt.Fprintln(w, "ID\tNAME\tTYPE\tSUMMARY\tTAGS\tUPDATED"); err != nil {
+		return err
+	}
 
 	for _, entity := range entities {
 		summary := entity.Summary
@@ -105,15 +105,16 @@ func outputEntitiesTable(entities []*Entity) error {
 			if len(tags) > 30 {
 				tags = tags[:27] + "..."
 			}
+			if _, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+				entity.ID,
+				entity.Name,
+				entity.Type,
+				summary,
+				tags,
+				entity.UpdatedAt.Format("2006-01-02 15:04")); err != nil {
+				return err
+			}
 		}
-
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-			entity.ID,
-			entity.Name,
-			entity.Type,
-			summary,
-			tags,
-			entity.UpdatedAt.Format("2006-01-02 15:04"))
 	}
 
 	return nil

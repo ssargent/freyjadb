@@ -12,7 +12,7 @@ import (
 func TestNewLogReader(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_reader_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -45,7 +45,7 @@ func TestNewLogReader_NonExistentFile(t *testing.T) {
 func TestNewLogReader_WithStartOffset(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_reader_offset_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -71,7 +71,7 @@ func TestNewLogReader_WithStartOffset(t *testing.T) {
 func TestLogReader_ReadNext_EOF(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_reader_eof_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "empty.log")
 
@@ -85,7 +85,7 @@ func TestLogReader_ReadNext_EOF(t *testing.T) {
 
 	reader, err := NewLogReader(config)
 	require.NoError(t, err)
-	defer reader.Close()
+	defer func() { _ = reader.Close() }() // Ignore error in cleanup
 
 	// Reading from empty file should return EOF or corruption error
 	record, err := reader.ReadNext()
@@ -96,7 +96,7 @@ func TestLogReader_ReadNext_EOF(t *testing.T) {
 func TestLogReader_Seek(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_reader_seek_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -111,13 +111,13 @@ func TestLogReader_Seek(t *testing.T) {
 
 	reader, err := NewLogReader(config)
 	require.NoError(t, err)
-	defer reader.Close()
+	defer func() { _ = reader.Close() }() // Ignore error in cleanup
 
 	// Initial offset should be 0
 	assert.Equal(t, int64(0), reader.Offset())
 
 	// Seek to position 5
-	err = reader.Seek(5)
+	err = reader.SeekTo(5)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(5), reader.Offset())
 }
@@ -125,7 +125,7 @@ func TestLogReader_Seek(t *testing.T) {
 func TestLogReader_Iterator(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_reader_iterator_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -139,7 +139,7 @@ func TestLogReader_Iterator(t *testing.T) {
 
 	reader, err := NewLogReader(config)
 	require.NoError(t, err)
-	defer reader.Close()
+	defer func() { _ = reader.Close() }() // Ignore error in cleanup
 
 	iterator := reader.Iterator()
 	assert.NotNil(t, iterator)
@@ -154,7 +154,7 @@ func TestLogReader_Iterator(t *testing.T) {
 func TestLogReader_ReadAt(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_reader_readat_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -169,7 +169,7 @@ func TestLogReader_ReadAt(t *testing.T) {
 
 	reader, err := NewLogReader(config)
 	require.NoError(t, err)
-	defer reader.Close()
+	defer func() { _ = reader.Close() }() // Ignore error in cleanup
 
 	// Read at offset 5
 	record, err := reader.ReadAt(5)
@@ -184,7 +184,7 @@ func TestLogReader_ReadAt(t *testing.T) {
 func TestLogReader_MultipleOperations(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "log_reader_multi_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -199,18 +199,18 @@ func TestLogReader_MultipleOperations(t *testing.T) {
 
 	reader, err := NewLogReader(config)
 	require.NoError(t, err)
-	defer reader.Close()
+	defer func() { _ = reader.Close() }() // Ignore error in cleanup
 
 	// Test multiple seeks
-	err = reader.Seek(0)
+	err = reader.SeekTo(0)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), reader.Offset())
 
-	err = reader.Seek(10)
+	err = reader.SeekTo(10)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(10), reader.Offset())
 
-	err = reader.Seek(5)
+	err = reader.SeekTo(5)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(5), reader.Offset())
 }
@@ -229,7 +229,7 @@ func TestLogReaderConfig_Validation(t *testing.T) {
 func BenchmarkLogReader_Seek(b *testing.B) {
 	tmpDir, err := os.MkdirTemp("", "log_reader_bench_seek")
 	require.NoError(b, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -247,12 +247,12 @@ func BenchmarkLogReader_Seek(b *testing.B) {
 
 	reader, err := NewLogReader(config)
 	require.NoError(b, err)
-	defer reader.Close()
+	defer func() { _ = reader.Close() }() // Ignore error in cleanup
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		offset := int64(i % 1000000)
-		if err := reader.Seek(offset); err != nil {
+		if err := reader.SeekTo(offset); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -261,7 +261,7 @@ func BenchmarkLogReader_Seek(b *testing.B) {
 func BenchmarkLogReader_ReadAt(b *testing.B) {
 	tmpDir, err := os.MkdirTemp("", "log_reader_bench_readat")
 	require.NoError(b, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }() // Ignore error in cleanup
 
 	filePath := filepath.Join(tmpDir, "test.log")
 
@@ -279,13 +279,11 @@ func BenchmarkLogReader_ReadAt(b *testing.B) {
 
 	reader, err := NewLogReader(config)
 	require.NoError(b, err)
-	defer reader.Close()
+	defer func() { _ = reader.Close() }() // Ignore error in cleanup
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		offset := int64(i % 1000000)
-		if _, err := reader.ReadAt(offset); err != nil {
-			// Ignore error in benchmark
-		}
+		_, _ = reader.ReadAt(offset) // errors expected once offset runs past EOF; benchmark only measures throughput
 	}
 }
