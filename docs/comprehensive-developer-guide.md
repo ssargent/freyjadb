@@ -52,36 +52,116 @@ make build
 just build
 ```
 
-### Quick Start with CLI
+### Understanding Initial Setup
 
-The easiest way to get started is using the `up` command:
+When you run FreyjaDB for the first time, the system automatically handles the creation of:
+
+1. **Configuration file** with securely generated keys
+2. **System store** with encryption for sensitive data
+3. **Three types of API keys**:
+   - **System Key**: Used for encrypting system data (minimum 32 characters recommended)
+   - **System API Key**: Used for administrative operations on the system store
+   - **Client API Key**: Used for regular data operations
+
+### Setting Up From Scratch
+
+#### Method 1: Recommended One-Command Setup
+
+The easiest way to get started is using the `freyja up` command:
 
 ```bash
-# One-command setup and server start
+# Simple setup with auto-generated keys
 freyja up
 
-# With custom settings
+# Setup with custom data directory and port
 freyja up --data-dir="./mydata" --port=9000
 
-# Print generated API keys
+# Setup and display the generated API keys
 freyja up --print-keys
 ```
 
-### Manual Setup
+When you run this command for the first time, it will:
 
-For more control, you can initialize and start the server manually:
+1. **Create configuration file** with securely generated keys
+2. **Initialize the system store** with encryption
+3. **Generate three types of API keys** as mentioned above
+4. **Start the REST API server**
+
+#### Method 2: Manual Setup Process
+
+If you prefer manual control, you can initialize and start separately:
+
+##### Step 1: Initialize the System Store
 
 ```bash
-# Initialize the system store
+# Initialize with auto-generated keys (recommended)
 freyja init --system-key="your-secure-system-key-here" --data-dir="./data"
 
-# Start the server
+# Or with custom API keys
+freyja init --system-key="your-secure-system-key-here" --system-api-key="your-custom-api-key" --data-dir="./data"
+```
+
+##### Step 2: Start the Server
+
+```bash
 freyja serve \
   --api-key="your-user-api-key" \
   --system-key="your-secure-system-key-here" \
   --data-dir="./data" \
   --enable-encryption \
   --port=8080
+```
+
+
+### Example Complete Setup
+
+Here's a complete example from fresh installation to using APIs:
+
+#### 1. Initialize and Start
+
+```bash
+# One command setup
+freyja up --print-keys --data-dir="./freyja-data"
+
+# Output will show:
+# 🔧 First run detected. Bootstrapping FreyjaDB...
+# ✅ Configuration created at /Users/user/.config/freyja/config.yaml
+# 
+# 🔑 Generated Keys:
+# System Key: abcdef1234567890...
+# System API Key: system-api-key-secure-random-123
+# Client API Key: client-api-key-secure-random-456
+# 
+# 🚀 Starting FreyjaDB server on 127.0.0.1:8080
+```
+
+#### 2. Use Client API Key for Data Operations
+
+```bash
+# Store user data
+curl -X PUT http://localhost:8080/api/v1/kv/user:123 \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: client-api-key-secure-random-456" \
+  -d '{"name": "John Doe", "email": "john@example.com"}'
+
+# Retrieve user data
+curl -X GET http://localhost:8080/api/v1/kv/user:123 \
+  -H "X-API-Key: client-api-key-secure-random-456"
+```
+
+#### 3. Use System API Key for Administrative Operations
+
+```bash
+# Create additional API keys
+curl -X POST http://localhost:8080/system/api-keys \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: system-api-key-secure-random-123" \
+  -d '{
+    "id": "production-api-key",
+    "key": "prod-api-key-secure-random-789",
+    "description": "Production API key for user data",
+    "is_active": true
+  }'
 ```
 
 ### Systemd Service (Production)
@@ -98,7 +178,6 @@ sudo systemctl status freyja.service
 # View logs
 sudo journalctl -u freyja.service -f
 ```
-
 ## Basic Operations
 
 ### Using the HTTP REST API
@@ -475,13 +554,56 @@ FreyjaDB separates system data from user data using a dual-store architecture:
 
 ### API Key Management
 
-Create and manage API keys through the system API:
+FreyjaDB uses a dual-key system for security:
+
+1. **System Key**: Used for encrypting system data (minimum 32 characters recommended)
+2. **System API Key**: Used for authenticating administrative operations
+3. **Client API Key**: Used for regular data operations
+
+### Getting Your First API Keys
+
+When you initialize FreyjaDB for the first time, the system automatically generates all necessary API keys:
+
+```bash
+# Initialize with auto-generated keys (recommended)
+freyja init --system-key="your-secure-system-key-here" --data-dir="./data"
+
+# Output will show:
+# Initializing FreyjaDB system...
+# Data directory: ./data
+# System key: your-secure-syst...
+# ✅ FreyjaDB system initialization completed successfully!
+# System API key: bf31bd3e16b17fa922367aca1404b372679395676d0afd1a42b91a08349685e4
+# Data directory: ./data
+```
+
+Alternatively, you can use the one-command setup which handles initialization and key generation automatically:
+
+```bash
+# One-command setup with auto-generated keys
+freyja up --print-keys
+
+# Output will show:
+# 🔧 First run detected. Bootstrapping FreyjaDB...
+# ✅ Configuration created at /Users/user/.config/freyja/config.yaml
+# 
+# 🔑 Generated Keys:
+# System Key: abcdef1234567890...
+# System API Key: system-api-key-secure-random-123
+# Client API Key: client-api-key-secure-random-456
+# 
+# 🚀 Starting FreyjaDB server on 127.0.0.1:8080
+```
+
+### Managing API Keys Through the System API
+
+Once the server is running, you can create and manage API keys through the system API:
 
 ```bash
 # Create a new API key
 curl -X POST http://localhost:8080/system/api-keys \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: your-secure-system-key-here" \
+  -H "X-API-Key: [SYSTEM_API_KEY]" \
   -d '{
     "id": "user-api-key-1",
     "key": "secure-random-api-key-12345",
@@ -491,11 +613,15 @@ curl -X POST http://localhost:8080/system/api-keys \
 
 # List all API keys
 curl -X GET http://localhost:8080/system/api-keys \
-  -H "X-API-Key: your-secure-system-key-here"
+  -H "X-API-Key: [SYSTEM_API_KEY]"
+
+# Get specific API key details
+curl -X GET http://localhost:8080/system/api-keys/user-api-key-1 \
+  -H "X-API-Key: [SYSTEM_API_KEY]"
 
 # Delete an API key
 curl -X DELETE http://localhost:8080/system/api-keys/user-api-key-1 \
-  -H "X-API-Key: your-secure-system-key-here"
+  -H "X-API-Key: [SYSTEM_API_KEY]"
 ```
 
 ### Encryption
